@@ -25,10 +25,10 @@ const LoginBody = z.object({
 });
 
 const SignupBody = z.object({
-  company_name: z.string().trim().min(2).max(120),
+  company_name: z.string().trim().min(2, 'Enter the company name.').max(120),
   company: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9-]{1,62}$/, 'Use 2-63 lowercase letters, numbers or hyphens'),
-  full_name: z.string().trim().min(1).max(120),
-  email: z.email().trim().toLowerCase(),
+  full_name: z.string().trim().min(1, 'Enter your name.').max(120),
+  email: z.email('Enter a valid email.').trim().toLowerCase(),
   password: passwordSchema,
 });
 
