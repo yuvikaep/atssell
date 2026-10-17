@@ -121,3 +121,19 @@ describe('invitation link to share while email is off', () => {
     expect(inviteLinkToCopy({ MAIL_DRIVER: 'off', WEB_ORIGIN: 'https://a.test' }, 't')).toBe('https://a.test/invite#t');
   });
 });
+
+describe('admin creates a login while email is off', () => {
+  it('sets a first password for a pending invitation, which then signs in; other users cannot', async () => {
+    const { res } = await invite('manual.login@inv.test');
+    const id = res.json().data.id;
+    const weak = await call(ctx, cookie, 'POST', `/users/invitations/${id}/create-login`, { full_name: 'Manual', password: 'short' });
+    expect(weak.statusCode).toBe(400);
+    const ok = await call(ctx, cookie, 'POST', `/users/invitations/${id}/create-login`, { full_name: 'Manual Person', password: 'first-password-123' });
+    expect(ok.statusCode, ok.body).toBe(201);
+    const signin = await ctx.app.inject({ method: 'POST', url: '/api/v1/auth/login', remoteAddress: nextIp(), payload: { company: co.slug, email: 'manual.login@inv.test', password: 'first-password-123' } });
+    expect(signin.statusCode).toBe(200);
+    expect((await call(ctx, cookie, 'POST', `/users/invitations/${id}/create-login`, { full_name: 'Again', password: 'first-password-123' })).statusCode).toBe(410);
+    const recruiter = await call(ctx, sessionCookie(signin), 'POST', `/users/invitations/${id}/create-login`, { full_name: 'X', password: 'first-password-123' });
+    expect(recruiter.statusCode).toBe(403);
+  });
+});

@@ -2,6 +2,7 @@ import { TermsPanel } from '../components/TermsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
+import { CreateLoginDialog } from '../components/CreateLoginDialog';
 import { api, ApiError, can } from '../api';
 import { useMe } from '../components/AppShell';
 import { Badge, Dialog, EmptyState, ErrorState, Field, fieldError, Forbidden, FormError, formatDate, Loading, StatusBadge, InviteLinkNotice } from '../components/ui';
@@ -17,6 +18,7 @@ export function AgencyDetailPage() {
   const queryClient = useQueryClient();
   const [inviting, setInviting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [creatingLogin, setCreatingLogin] = useState<{ id: string; email: string } | null>(null);
   const [inviteLink, setInviteLink] = useState<{ link?: string | null; email: string } | null>(null);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['agency-members', id] });
 
@@ -53,6 +55,7 @@ export function AgencyDetailPage() {
       {(update.error || inviteAction.error) && <FormError error={update.error ?? inviteAction.error} />}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
       <InviteLinkNotice link={inviteLink?.link} email={inviteLink?.email} />
+      {creatingLogin && <CreateLoginDialog invitation={creatingLogin} onClose={() => setCreatingLogin(null)} />}
 
       <TermsPanel agencyId={agency.id} />
 
@@ -100,6 +103,7 @@ export function AgencyDetailPage() {
                     <td>{ROLE_LABEL[i.agency_role]}</td>
                     <td>{i.expired ? <Badge tone="warning">Expired</Badge> : <span className="muted">Expires {formatDate(i.expires_at)}</span>}</td>
                     <td className="actions">
+                      <button className="btn btn-sm" onClick={() => setCreatingLogin(i)}>Create login</button>
                       <button className="btn btn-sm" disabled={inviteAction.isPending} onClick={() => inviteAction.mutate({ invitationId: i.id, kind: 'resend', email: i.email })}>Resend</button>
                       <button className="btn btn-sm btn-danger" disabled={inviteAction.isPending} onClick={() => inviteAction.mutate({ invitationId: i.id, kind: 'revoke', email: i.email })}>Revoke</button>
                     </td>

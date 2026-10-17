@@ -7,9 +7,10 @@ import { audit } from '../audit.js';
 import { pgConstraint, pgErrorCode, withTenant, type Tx } from '../db.js';
 import { AppError, notFound } from '../errors.js';
 import { requirePermission } from '../permissions.js';
-import { randomToken, sha256Hex } from '../security.js';
+import { hashPassword, randomToken, sha256Hex } from '../security.js';
 import { revokeUserSessions } from '../services/sessions.js';
-import { idParams, pageQuery } from './common.js';
+import { createInvitedUser, findInvitation } from './invitations.js';
+import { idParams, pageQuery, passwordSchema } from './common.js';
 
 // Agency members are invited from agency management (Sprint 3), where the agency is chosen.
 const AGENCY_ROLES = new Set(['agency_admin', 'agency_recruiter']);
@@ -426,5 +427,20 @@ export async function userRoutes(app: FastifyInstance) {
 
     const invite_link = await sendInvitationEmail(p, result.inv.email, result.roleName, result.token, result.inv.expires_at);
     return reply.status(201).send({ data: { ...result.inv, invite_link } });
+  });
+
+  // While email is off: the admin sets a first password for an invited person and passes it on.
+  // They can change it after signing in (Profile → Change password).
+  app.post('/users/invitations/:id/create-login', async (req, reply) => {
+    const p = principal(req);
+    requirePermission(p, 'users.manage');
+    const { id } = idParams.parse(req.params);
+    const body = z.object({ full_name: z.string().trim().min(1, 'Enter their name.').max(200), password: passwordSchema }).parse(req.body);
+    const passwordHash = await hashPassword(body.password);
+    const user = await withTenant(db, p.tenantId, async (tx) => {
+      const inv = await findInvitation(tx, { id }, true);
+      return createInvitedUser(tx, req, inv, body.full_name, passwordHash, p.userId);
+    });
+    return reply.status(201).send({ data: { user_id: user.id, company: p.tenantSlug } });
   });
 }
