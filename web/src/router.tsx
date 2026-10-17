@@ -37,6 +37,7 @@ import { RequisitionsPage } from './pages/Requisitions';
 import { ResetPasswordPage } from './pages/ResetPassword';
 import { UsersPage } from './pages/Users';
 import { VacanciesPage } from './pages/Vacancies';
+import { SignupPage } from './pages/Signup';
 import { VacancyDetailPage } from './pages/VacancyDetail';
 import { meQuery, queryClient } from './queries';
 
@@ -52,6 +53,7 @@ const loginRoute = createRoute({
   validateSearch: (s: Record<string, unknown>) => ({ redirect: typeof s.redirect === 'string' ? s.redirect : undefined }),
   component: LoginPage,
 });
+const signupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/signup', component: SignupPage });
 const forgotRoute = createRoute({ getParentRoute: () => rootRoute, path: '/forgot-password', component: ForgotPasswordPage });
 const resetRoute = createRoute({ getParentRoute: () => rootRoute, path: '/reset-password', component: ResetPasswordPage });
 const inviteRoute = createRoute({ getParentRoute: () => rootRoute, path: '/invite', component: AcceptInvitePage });
@@ -109,6 +111,7 @@ const portalSubmissionsRoute = createRoute({ getParentRoute: () => appRoute, pat
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  signupRoute,
   forgotRoute,
   resetRoute,
   inviteRoute,

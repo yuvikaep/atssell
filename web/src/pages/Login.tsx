@@ -60,6 +60,8 @@ export function LoginPage() {
       </form>
       <div className="auth-footer">
         <Link to="/forgot-password">Forgot password?</Link>
+        {' · '}
+        <Link to="/signup">Create a new company</Link>
       </div>
     </AuthLayout>
   );

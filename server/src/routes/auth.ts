@@ -6,6 +6,7 @@ import { setTenant, setTokenHash, withTenant } from '../db.js';
 import { AppError } from '../errors.js';
 import { getDummyHash, hashPassword, randomToken, sha256Hex, verifyPassword } from '../security.js';
 import { createSession, revokeUserSessions, SESSION_COOKIE } from '../services/sessions.js';
+import { createTenantIn } from '../services/tenants.js';
 import {
   clearSessionCookie,
   passwordSchema,
@@ -21,6 +22,14 @@ const LoginBody = z.object({
   company: companySchema,
   email: z.email().trim(),
   password: z.string().min(1).max(256),
+});
+
+const SignupBody = z.object({
+  company_name: z.string().trim().min(2).max(120),
+  company: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9-]{1,62}$/, 'Use 2-63 lowercase letters, numbers or hyphens'),
+  full_name: z.string().trim().min(1).max(120),
+  email: z.email().trim().toLowerCase(),
+  password: passwordSchema,
 });
 
 const ResetRequestBody = z.object({ company: companySchema, email: z.email().trim() });
@@ -97,6 +106,34 @@ export async function authRoutes(app: FastifyInstance) {
     if (!result.ok) throw result.error;
     setSessionCookie(reply, config, result.session.token, result.session.expiresAt);
     return { data: { user: { id: result.user.id, full_name: result.user.full_name } } };
+  });
+
+  // Self-service: a new company and its first admin, signed in straight away.
+  app.post('/auth/signup', { config: publicRateLimit(5) }, async (req, reply) => {
+    const body = SignupBody.parse(req.body);
+    const passwordHash = await hashPassword(body.password);
+    const taken = await db.selectFrom('tenants').select('id').where('slug', '=', body.company).executeTakeFirst();
+    if (taken) throw new AppError(409, 'COMPANY_CODE_TAKEN', 'This company code is already in use. Choose another.');
+
+    const result = await db.transaction().execute(async (tx) => {
+      const created = await createTenantIn(tx, {
+        name: body.company_name, slug: body.company, adminEmail: body.email, adminName: body.full_name, adminPasswordHash: passwordHash,
+      });
+      const session = await createSession(tx, {
+        tenantId: created.tenant.id,
+        userId: created.admin.id,
+        ttlHours: config.SESSION_TTL_HOURS,
+        ipHash: requestIpHash(req),
+        userAgent: req.headers['user-agent'],
+      });
+      return { ...created, session };
+    }).catch((err: { code?: string }) => {
+      if (err.code === '23505') throw new AppError(409, 'COMPANY_CODE_TAKEN', 'This company code is already in use. Choose another.');
+      throw err;
+    });
+
+    setSessionCookie(reply, config, result.session.token, result.session.expiresAt);
+    return reply.status(201).send({ data: { user: { id: result.admin.id, full_name: body.full_name }, company: result.tenant.slug } });
   });
 
   app.post('/auth/logout', async (req, reply) => {

@@ -185,3 +185,26 @@ describe('password reset', () => {
     await login(ctx, fresh.slug, fresh.admin.email, 'first-admin-password');
   });
 });
+
+describe('company signup', () => {
+  const signup = (payload: object) => ctx.app.inject({ method: 'POST', url: '/api/v1/auth/signup', remoteAddress: nextIp(), payload });
+  const slug = `su-${Date.now().toString(36)}`;
+  const body = { company_name: 'Signup Co', company: slug, full_name: 'Sam Founder', email: `sam@${slug}.test`, password: PASSWORD };
+
+  it('creates a company with its admin signed in, who can then log in', async () => {
+    const res = await signup(body);
+    expect(res.statusCode, res.body).toBe(201);
+    const me = (await call(ctx, sessionCookie(res), 'GET', '/me')).json().data;
+    expect(me.tenant.slug).toBe(slug);
+    expect(me.roles.map((r: { code: string }) => r.code)).toEqual(['company_admin']);
+    expect((await loginReq({ company: slug, email: body.email, password: PASSWORD })).statusCode).toBe(200);
+  });
+
+  it('refuses a company code in use and keeps companies apart', async () => {
+    const again = await signup({ ...body, email: 'other@x.test' });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error.code).toBe('COMPANY_CODE_TAKEN');
+    expect((await signup({ ...body, company: 'Bad Code!' })).statusCode).toBe(400);
+    expect((await loginReq({ company: company.slug, email: body.email, password: PASSWORD })).statusCode).toBe(401);
+  });
+});
