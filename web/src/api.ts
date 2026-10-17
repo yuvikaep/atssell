@@ -17,6 +17,11 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 204) return undefined as T;
+  // Anything but JSON did not come from the API: the hosting platform answered instead (a crashed
+  // function, or /api routed to the static site).
+  if (!res.headers.get('content-type')?.includes('application/json')) {
+    throw new ApiError(res.status >= 400 ? res.status : 502, 'API_UNREACHABLE', `The API did not answer (HTTP ${res.status} from ${path}). The server may be down or /api is not routed to the API.`);
+  }
   const json = await res.json().catch(() => null);
   if (!res.ok) {
     const e = json?.error;

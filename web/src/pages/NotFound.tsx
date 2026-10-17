@@ -1,4 +1,5 @@
 import { Link, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { ApiError } from '../api';
 import { AuthLayout } from './AuthLayout';
 
 export function NotFoundPage() {
@@ -11,11 +12,17 @@ export function NotFoundPage() {
 }
 
 /** Shown when a page fails to load, e.g. the API is unreachable. */
-export function AppErrorPage({ reset }: ErrorComponentProps) {
+export function AppErrorPage({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
+  // The server's own explanation (missing settings, database not set up) helps whoever has to fix it.
+  const details = error instanceof ApiError && Array.isArray(error.details) ? error.details.filter((d): d is string => typeof d === 'string') : [];
   return (
     <AuthLayout title="Can't reach JobsMato right now">
       <p>Check your connection and try again. If this keeps happening, contact support.</p>
+      <div className="alert alert-error">
+        {error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error && error.message ? error.message : 'Unknown error'}
+        {details.length > 0 && <ul>{details.map((d) => <li key={d}>{d}</li>)}</ul>}
+      </div>
       <button
         className="btn btn-primary btn-block"
         onClick={() => {
