@@ -1,10 +1,14 @@
 # Vercel deployment
 
-Import the repository as **one Services project**, with Root Directory `./`.
-The root `vercel.json` builds `web` (Vite) and `api` (Fastify), sends `/api/*`
-and `/health` to the API, and serves frontend routes from the SPA.
-If previously imported as a frontend-only project, change its root to the repository root
-and remove the project-level frontend build/output overrides before redeploying.
+Import the repository as one Vercel project. Root Directory `./` (preferred) or `web` both work:
+`vercel.json` (and `web/vercel.json`) run `scripts/vercel-build.mjs`, which writes the
+[Build Output API](https://vercel.com/docs/build-output-api) layout to `.vercel/output`:
+
+- `static/`: the web app (Vite build)
+- `functions/api.func`: the whole API bundled as one Node function (`api/src/vercel.ts`)
+- routes: `/api/*` and `/health` go to the function, other paths serve the app (so `/login` works)
+
+The build does not depend on the project's framework preset or output settings.
 
 ## Database
 
@@ -33,6 +37,12 @@ node api/dist/migrate-cli.js
 
 Run migrations once before deploying the corresponding code, not on every request or
 in parallel preview builds. Do not connect previews to the production database.
+
+Without a terminal, you can instead let production builds migrate: add `DATABASE_URL_ADMIN`
+(owner, unpooled) and `APP_DB_ROLE=jm_app` to the Vercel project for the **Production**
+environment only. Each production build then applies new migrations before going live, and a
+failed migration fails the deployment. The trade-off: the owner credential is then stored in
+Vercel, so keep project access tight. The `jm_app` role must exist first (SQL above).
 
 ## API environment variables
 
@@ -96,5 +106,4 @@ Verify `/health`, direct navigation to `/login`, login using the company code, t
 isolation, uploads/downloads and email delivery. Vercel Function request-body limits
 also apply; the application's 25 MB upload limit does not override the hosting limit.
 
-References: https://vercel.com/docs/services and
-https://vercel.com/docs/frameworks/backend/fastify
+Reference: https://vercel.com/docs/build-output-api

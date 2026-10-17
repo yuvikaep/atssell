@@ -19,7 +19,8 @@
     "build": "npm run -w api build && npm run -w web build"
   },
   "devDependencies": {
-    "concurrently": "^9.2.5"
+    "concurrently": "^9.2.5",
+    "esbuild": "^0.28.2"
   },
   "engines": {
     "node": ">=22"

@@ -1,8 +1,7 @@
-import Fastify from 'fastify';
-import { ZodError } from 'zod';
 import { buildApp } from './app.js';
 import { loadConfig, type Config } from './config.js';
 import { createDb } from './db.js';
+import { misconfiguredApp } from './misconfigured.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMailer, createScanner, createStorage } from './providers/index.js';
@@ -43,20 +42,9 @@ async function start(config: Config) {
   await app.listen({ port: config.API_PORT, host: config.API_HOST });
 }
 
-/**
- * Invalid settings on Vercel: instead of a crashed function that only says FUNCTION_INVOCATION_FAILED,
- * answer every request with 503 naming the settings to fix (names only, never values). Elsewhere the
- * process exits so a supervisor notices.
- */
+/** Invalid settings: exit so a supervisor notices, except on Vercel, where a crash shows no reason. */
 async function serveMisconfigured(err: unknown) {
-  const problems = err instanceof ZodError
-    ? err.issues.map((i) => `${i.path.join('.')}: ${i.message}`)
-    : [(err as Error).message];
-  console.error(`API configuration is invalid:\n  ${problems.join('\n  ')}`);
+  const app = misconfiguredApp(err);
   if (process.env.VERCEL !== '1') process.exit(1);
-  const app = Fastify();
-  app.all('/*', async (req, reply) => reply.status(503).send({
-    error: { code: 'SERVER_MISCONFIGURED', message: 'The API is missing required settings. Set them in the Vercel project and redeploy.', details: problems, request_id: req.id },
-  }));
   await app.listen({ port: Number(process.env.API_PORT) || 3000, host: process.env.API_HOST ?? '127.0.0.1' });
 }
