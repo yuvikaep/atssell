@@ -1,4 +1,4 @@
-// Production migration entry point (compiled with the API): node api/dist/migrate-cli.js
+// Production migration entry point (compiled with the API): node server/dist/migrate-cli.js
 import { migrate } from './migrate.js';
 
 // DATABASE_URL_UNPOOLED is the owner connection Vercel's Neon integration adds.

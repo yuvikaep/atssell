@@ -11,7 +11,7 @@ Out of scope until separately built: calendar and email-inbox integration, AI re
 - [ ] Company created, roles assigned, departments set, pipeline reviewed
 - [ ] Retention period and candidate notice agreed (`docs/DATA_PROTECTION.md`)
 - [ ] Load test rerun on production-like hardware
-- [ ] Baseline captured: `npm run -w api pilot:baseline -- --company <code>`
+- [ ] Baseline captured: `npm run -w server pilot:baseline -- --company <code>`
 - [ ] Support contact and incident owner named
 
 ## Success measures (agree targets with the customer; none are promised here)

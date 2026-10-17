@@ -2,7 +2,7 @@
 // through the API, then runs a mixed read workload at fixed concurrency and reports latency percentiles.
 // Exits non-zero if p95 exceeds the target (default 2000 ms) or any request fails.
 //
-//   npm run -w api load-test -- --candidates 2000 --duration 30 --concurrency 20
+//   npm run -w server load-test -- --candidates 2000 --duration 30 --concurrency 20
 //
 // Needs the API running (API_URL, default http://localhost:3000) and DATABASE_URL_ADMIN for provisioning.
 import { parseArgs } from 'node:util';

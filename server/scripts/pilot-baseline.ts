@@ -1,5 +1,5 @@
 // Pilot baseline: the numbers to record before and after a pilot, per company, straight from the database.
-// Usage: npm run -w api pilot:baseline -- --company demo
+// Usage: npm run -w server pilot:baseline -- --company demo
 import { parseArgs } from 'node:util';
 import { sql } from 'kysely';
 import { createDb } from '../src/db.js';

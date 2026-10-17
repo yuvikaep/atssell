@@ -1,6 +1,6 @@
 // Retention report: who is past their retention date or has none. Report only; nothing is deleted.
 // Deletion of personal data is a deliberate, reviewed act (see docs/DATA_PROTECTION.md).
-// Usage: npm run -w api retention:report -- --company demo
+// Usage: npm run -w server retention:report -- --company demo
 import { parseArgs } from 'node:util';
 import { sql } from 'kysely';
 import { createDb } from '../src/db.js';

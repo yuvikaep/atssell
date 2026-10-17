@@ -5,7 +5,7 @@ Import the repository as one Vercel project. Root Directory `./` (preferred) or 
 [Build Output API](https://vercel.com/docs/build-output-api) layout to `.vercel/output`:
 
 - `static/`: the web app (Vite build)
-- `functions/api.func`: the whole API bundled as one Node function (`api/src/vercel.ts`)
+- `functions/api.func`: the whole API bundled as one Node function (`server/src/vercel.ts`)
 - routes: `/api/*` and `/health` go to the function, other paths serve the app (so `/login` works)
 
 The build does not depend on the project's framework preset or output settings.
@@ -56,7 +56,7 @@ From the repository root, with `DATABASE_URL_ADMIN` and `APP_DB_ROLE` loaded sec
 ```sh
 npm ci
 npm run build
-node api/dist/migrate-cli.js
+node server/dist/migrate-cli.js
 ```
 
 Run migrations once before deploying the corresponding code, not on every request or
@@ -113,7 +113,7 @@ In the private operator environment, set `WEB_ORIGIN` to the deployed app origin
 and use the owner connection as `DATABASE_URL_ADMIN`:
 
 ```sh
-node api/dist/create-tenant-cli.js --name "Your Company" --slug your-company --admin-email admin@example.com --admin-name "Admin Name"
+node server/dist/create-tenant-cli.js --name "Your Company" --slug your-company --admin-email admin@example.com --admin-name "Admin Name"
 ```
 
 Use the printed one-time password setup link privately. Do not run this from deployment

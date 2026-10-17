@@ -6,7 +6,7 @@ What is enforced, where, and how it is checked. Anything not listed here is not 
 - Every table carrying `tenant_id` has row-level security **enabled and forced**, with a policy tying rows to `app.tenant_id`.
 - The API connects as `jm_app`: not a superuser, no `BYPASSRLS`. Each request opens a transaction and sets `app.tenant_id` (`withTenant`).
 - Foreign keys between tenant tables are composite `(tenant_id, id)`, so a row cannot point at another company's row.
-- Checked by `api/test/security.test.ts` (catalogue check of every tenant table, role attributes, no-tenant-set returns nothing, cross-tenant read/write matrix) and `tenancy*.test.ts`.
+- Checked by `server/test/security.test.ts` (catalogue check of every tenant table, role attributes, no-tenant-set returns nothing, cross-tenant read/write matrix) and `tenancy*.test.ts`.
 
 ## Authentication and sessions
 - Passwords: scrypt. Sessions: random 256-bit cookie token, only its SHA-256 stored; `HttpOnly`, `SameSite=Lax`.
@@ -20,7 +20,7 @@ What is enforced, where, and how it is checked. Anything not listed here is not 
 - Roles map to permissions; scopes are company-wide or per department. Vacancy, candidate and requisition visibility are central helpers (`access.ts`).
 - Agency users have only `submissions.create` and `agency_portal.use`, and see only their own submissions' stored profile.
 - Contact details and pay are removed server-side unless the role allows them, including in CSV exports.
-- Every authenticated route sits behind one session hook. The route table is asserted in tests: the public surface is a snapshot (11 routes, listed in `api/test/__snapshots__/`), and every other route must answer 401 without a session. Adding a public route changes the snapshot and must be a deliberate decision.
+- Every authenticated route sits behind one session hook. The route table is asserted in tests: the public surface is a snapshot (11 routes, listed in `server/test/__snapshots__/`), and every other route must answer 401 without a session. Adding a public route changes the snapshot and must be a deliberate decision.
 
 ## Data integrity
 - Audit, ownership, stage-history, feedback, feedback-correction and interview-event tables are append-only (trigger + no UPDATE/DELETE grant). Tested.

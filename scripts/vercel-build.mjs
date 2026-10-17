@@ -12,13 +12,13 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.resolve(process.cwd(), '.vercel/output');
 const run = (cmd) => execSync(cmd, { cwd: repo, stdio: 'inherit' });
 
-run('npm run -w api typecheck');
+run('npm run -w server typecheck');
 run('npm run -w web build');
 
 // Optional: with the owner connection set for production builds only, bring the schema up to date
 // before this code goes live. Migrations are idempotent; a failed one fails the deployment.
 if ((process.env.DATABASE_URL_ADMIN || process.env.DATABASE_URL_UNPOOLED) && process.env.VERCEL_ENV === 'production') {
-  run('npx tsx api/src/migrate-cli.ts');
+  run('npx tsx server/src/migrate-cli.ts');
 }
 
 await rm(out, { recursive: true, force: true });
@@ -27,7 +27,7 @@ await cp(path.join(repo, 'web/dist'), path.join(out, 'static'), { recursive: tru
 
 const fn = path.join(out, 'functions/api.func');
 await build({
-  entryPoints: [path.join(repo, 'api/src/vercel.ts')],
+  entryPoints: [path.join(repo, 'server/src/vercel.ts')],
   outfile: path.join(fn, 'index.mjs'),
   bundle: true,
   platform: 'node',

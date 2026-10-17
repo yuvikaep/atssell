@@ -14,7 +14,7 @@ Candidates: name, email, phone, city, title, experience, current and expected pa
 - One-time links are hash-only and never logged.
 
 ## Retention
-`npm run -w api retention:report -- --company <code>` lists candidates past or near their retention date and those with no date or no recorded notice. It changes nothing. **No automatic deletion is built**: purging personal data is a reviewed act, and some tables are append-only by design (audit, feedback). A deletion/anonymisation procedure for append-only history has not been designed; decide it with counsel before the pilot ends.
+`npm run -w server retention:report -- --company <code>` lists candidates past or near their retention date and those with no date or no recorded notice. It changes nothing. **No automatic deletion is built**: purging personal data is a reviewed act, and some tables are append-only by design (audit, feedback). A deletion/anonymisation procedure for append-only history has not been designed; decide it with counsel before the pilot ends.
 
 ## Requests from individuals
 Access and deletion requests are handled manually today: locate the candidate, export their record, then anonymise on instruction. There is no self-service flow.

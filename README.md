@@ -38,9 +38,9 @@ In development, invitation and password-reset emails are printed to the API cons
 | `npm test` | API tests against a real Postgres test database (`jobsmato_test`, reset each run) |
 | `npm run typecheck` | Type-check API and web |
 | `npm run db:start` / `db:stop` | Start or stop the local Postgres |
-| `npm run -w api load-test` | Seeds a throwaway company through the API and measures read latency under concurrent load (needs the API running) |
-| `npm run -w api pilot:baseline -- --company demo` | Prints the pilot baseline numbers for a company |
-| `npm run -w api retention:report -- --company demo` | Lists candidates past or near their retention date (changes nothing) |
+| `npm run -w server load-test` | Seeds a throwaway company through the API and measures read latency under concurrent load (needs the API running) |
+| `npm run -w server pilot:baseline -- --company demo` | Prints the pilot baseline numbers for a company |
+| `npm run -w server retention:report -- --company demo` | Lists candidates past or near their retention date (changes nothing) |
 | `bash scripts/backup.sh` / `bash scripts/restore-drill.sh` | Back up the database and files; prove the latest backup restores |
 | `docker compose up --build` | Production-shaped stack: Postgres, S3 API, ClamAV, mail catcher, API, web on http://localhost:8080 |
 | `npm run tenant:create -- --name "Acme" --slug acme --admin-email a@acme.test --admin-name "Asha Rao"` | Provision a company. Prints a one-time set-password link for its first admin |
@@ -61,10 +61,10 @@ api/        Fastify + Kysely REST API (/api/v1)
   src/services/   sessions, tenant provisioning
   test/           Vitest suites, run against Postgres as the restricted app role
 web/        React + Vite + TanStack Router/Query
-db/migrations/  Plain SQL, applied in order by api/src/migrate.ts
+db/migrations/  Plain SQL, applied in order by server/src/migrate.ts
 docs/       Security, threat model, runbook, data protection, pilot plan
 scripts/    Database, backup and restore-drill scripts
-docker-compose.yml, api/Dockerfile, web/Dockerfile   Production-shaped stack
+docker-compose.yml, server/Dockerfile, web/Dockerfile   Production-shaped stack
 PRD/        Product spec, schema v1.1, schema behaviour tests
 ```
 
@@ -222,6 +222,6 @@ Not in Sprint 1, still to do:
 - Do database work inside `withTenant(db, principal.tenantId, tx => …)`. Code outside it sees no tenant data.
 - **Zod 4 applies `.default()` even inside `.partial()`.** A PATCH built from a schema with defaults silently
   overwrites unsent fields with those defaults. Keep update schemas free of defaults (see `candidateShape`
-  in `api/src/routes/candidates.ts`) and add a test that an edit leaves other fields alone.
+  in `server/src/routes/candidates.ts`) and add a test that an edit leaves other fields alone.
 - Signed download links are about 180 characters, so Fastify's `maxParamLength` is raised to 512.
-- NUMERIC and BIGINT columns are returned as JS numbers and DATE columns as `YYYY-MM-DD` strings (see `api/src/db.ts`).
+- NUMERIC and BIGINT columns are returned as JS numbers and DATE columns as `YYYY-MM-DD` strings (see `server/src/db.ts`).

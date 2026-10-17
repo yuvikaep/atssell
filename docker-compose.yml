@@ -20,10 +20,10 @@ services:
     restart: "no"
 
   migrate:
-    build: { context: ., dockerfile: api/Dockerfile }
+    build: { context: ., dockerfile: server/Dockerfile }
     depends_on: { dbinit: { condition: service_completed_successfully } }
     environment: { DATABASE_URL_ADMIN: "postgres://postgres:postgres@db:5432/jobsmato", APP_DB_ROLE: jm_app }
-    command: ["node", "api/dist/migrate-cli.js"]
+    command: ["node", "server/dist/migrate-cli.js"]
     restart: "no"
 
   s3:
@@ -48,7 +48,7 @@ services:
     ports: ["8025:8025"]   # web inbox
 
   api:
-    build: { context: ., dockerfile: api/Dockerfile }
+    build: { context: ., dockerfile: server/Dockerfile }
     depends_on:
       migrate: { condition: service_completed_successfully }
       s3-init: { condition: service_completed_successfully }
@@ -80,10 +80,10 @@ services:
     ports: ["8080:80"]
 
   tenant:
-    build: { context: ., dockerfile: api/Dockerfile }
+    build: { context: ., dockerfile: server/Dockerfile }
     profiles: ["tools"]
     depends_on: { migrate: { condition: service_completed_successfully } }
     environment: *apienv
-    entrypoint: ["node", "api/dist/create-tenant-cli.js"]
+    entrypoint: ["node", "server/dist/create-tenant-cli.js"]
 
 volumes: { pgdata: {}, clamdb: {} }

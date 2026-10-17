@@ -2,7 +2,7 @@
 FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY api/package.json api/
+COPY server/package.json api/
 COPY web/package.json web/
 RUN npm ci
 COPY web web
