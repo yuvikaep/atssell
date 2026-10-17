@@ -1,0 +1,46 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://jm_app@localhost:5433/jobsmato_test
+      TEST_DATABASE_URL_ADMIN: postgres://postgres:postgres@localhost:5433/jobsmato_test
+      DATABASE_URL: postgres://jm_app@localhost:5433/jobsmato_test
+      DATABASE_URL_ADMIN: postgres://postgres:postgres@localhost:5433/jobsmato_test
+      APP_DB_ROLE: jm_app
+      WEB_ORIGIN: http://localhost:5180
+      IP_HASH_SALT: ci-only-salt-value
+      FILE_URL_SECRET: ci-only-secret-value-123456
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Create the app database role and test database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -c "CREATE ROLE jm_app LOGIN NOBYPASSRLS"
+          PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE jobsmato_test"
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Dependency audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+  images:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f api/Dockerfile -t jobsmato-api .
+      - run: docker build -f web/Dockerfile -t jobsmato-web .

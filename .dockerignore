@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+.pgdata
+.storage
+backups
+.env
+**/dist
+.git
+.claude
+PRD

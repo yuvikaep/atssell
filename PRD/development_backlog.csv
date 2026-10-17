@@ -1,0 +1,29 @@
+﻿Epic ID,Module,User Story / Task,Priority,Primary User,Acceptance Criteria,Target Sprint
+EPIC-01,Foundation,Set up tenant-aware application shell,P0,Platform Admin,Tenant CRUD; tenant context resolved server-side; tests for cross-tenant access,Sprint 1
+EPIC-01,Foundation,Implement authentication and role permissions,P0,Company Admin,Login/invitation flow; effective permissions enforced on every protected endpoint,Sprint 1
+EPIC-01,Foundation,Create departments and user assignment UI,P0,Company Admin,Create/edit/deactivate departments and assign scoped roles,Sprint 1
+EPIC-02,Requisitions,Create requisition and approval workflow,P0,Hiring Manager,Draft/submit/approve/reject; required validation and audit events,Sprint 1-2
+EPIC-02,Vacancies,Manage vacancies and assign recruiters/agencies,P0,TA Manager,List/detail/filter; assignment records; restricted vacancy access,Sprint 2
+EPIC-03,Candidates,Create candidate and upload resume securely,P0,Recruiter,Allowed file types/size; malware scanning; signed downloads; audit event,Sprint 2
+EPIC-03,Candidates,Candidate search and filtering,P0,Recruiter,Search permitted records by name/contact/skills/location; pagination and tests,Sprint 2
+EPIC-03,Candidates,Detect possible duplicates and review,P0,Recruiter,Exact contact match and fuzzy warning; no silent merge; merge history retained,Sprint 2
+EPIC-04,Pipeline,Create application and update pipeline stages,P0,Recruiter,Candidate-vacancy relation; allowed transitions; reasons and timestamps,Sprint 2
+EPIC-05,Agencies,Invite agency and create agency workspace,P0,Agency Admin,Agency sees only assigned vacancies and own permitted submissions,Sprint 3
+EPIC-05,Agencies,Submit candidates and preserve source history,P0,Agency Recruiter,"Source, submitting user, timestamp and resume recorded",Sprint 3
+EPIC-05,Ownership,Implement candidate ownership policy and dispute review,P0,TA Manager,Configurable provisional ownership; audit events; cross-vacancy reuse,Sprint 3
+EPIC-06,Interviews,Create and schedule interview,P0,Recruiter,"Round, time zone, mode, panel and status; reschedule/cancel reasons",Sprint 4
+EPIC-06,Interviews,Create interview scorecard templates,P0,TA Manager,Required rating/recommendation; configurable competencies per round,Sprint 4
+EPIC-07,Feedback Links,Generate secure single-use feedback link,P0,Recruiter,256-bit random token; store hash only; expiry and audit event,Sprint 4
+EPIC-07,Feedback Links,Build public interviewer feedback page,P0,External Interviewer,No ATS login; show minimum permitted candidate/job fields; mobile responsive,Sprint 4
+EPIC-07,Feedback Links,Implement token validation and revocation,P0,Backend,Reject expired/revoked/consumed; generic errors; rate limit; regeneration revokes old token,Sprint 4
+EPIC-07,Feedback Links,Submit feedback atomically once,P0,External Interviewer,"DB transaction locks token, inserts feedback, consumes token and writes audit event",Sprint 4
+EPIC-07,Feedback Links,Build feedback review and correction workflow,P0,Recruiter,Submitted feedback read-only by default; corrections create audit-linked record,Sprint 4
+EPIC-08,Notifications,Send feedback reminders and submission notice,P0,System,Queue/retry delivery; prevent duplicate notifications; in-app fallback,Sprint 4-5
+EPIC-09,Analytics,Build role-specific dashboards,P0,TA Head,Filters and metrics match documented definitions; tenant/role scoping tested,Sprint 5
+EPIC-09,Analytics,Build feedback SLA and vacancy ageing reports,P0,TA Head,Pending/overdue feedback and open vacancy age visible,Sprint 5
+EPIC-10,Offer & Joining,Track offer and joining status,P1,Recruiter,"Offer status, approval and joining outcome; salary fields permission-gated",Post-MVP / Sprint 6
+EPIC-11,Integrations,Integrate email/calendar provider,P1,Recruiter,Invite/update/cancel events and provider failure states,Post-MVP
+EPIC-11,AI,Resume parsing and semantic search,P1,Recruiter,Human review of parsed data; confidence and source visible,Post-MVP
+EPIC-12,Security,Complete security review and tenant isolation tests,P0,Engineering,No critical/high findings; cross-tenant and agency leakage tests pass,Sprint 5
+EPIC-12,QA,Test feedback link expiry/revocation/concurrency,P0,QA,Concurrent duplicate submissions yield at most one successful feedback record,Sprint 5
+EPIC-12,Release,Run pilot with two departments and multiple agencies,P0,Product,Pilot metrics recorded; support and rollback plan available,Sprint 5

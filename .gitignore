@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.pgdata/
+.env
+*.log
+.DS_Store
+coverage/
+.storage/
+backups/

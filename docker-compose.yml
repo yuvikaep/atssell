@@ -1,0 +1,89 @@
+# A production-shaped stack on one machine: Postgres, S3-compatible storage (LocalStack), ClamAV, a catch-all
+# mail server (Mailpit) and the app. For rehearsing deployment and the restore drill, not for the internet:
+# secrets below are placeholders and nothing is behind TLS. See docs/RUNBOOK.md.
+#
+#   docker compose up --build        # then open http://localhost:8080
+#   docker compose run --rm tenant   # create a first company (prints a set-password link)
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: jobsmato }
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U postgres -d jobsmato"], interval: 3s, timeout: 3s, retries: 20 }
+
+  dbinit:
+    image: postgres:16-alpine
+    depends_on: { db: { condition: service_healthy } }
+    environment: { PGPASSWORD: postgres }
+    # The app role cannot bypass row-level security; its password is set here for the stack only.
+    entrypoint: ["sh", "-c", "psql -h db -U postgres -d jobsmato -c \"DO \\$\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='jm_app') THEN CREATE ROLE jm_app LOGIN NOBYPASSRLS PASSWORD 'jm_app_pw'; END IF; END \\$\\$;\""]
+    restart: "no"
+
+  migrate:
+    build: { context: ., dockerfile: api/Dockerfile }
+    depends_on: { dbinit: { condition: service_completed_successfully } }
+    environment: { DATABASE_URL_ADMIN: "postgres://postgres:postgres@db:5432/jobsmato", APP_DB_ROLE: jm_app }
+    command: ["node", "api/dist/migrate-cli.js"]
+    restart: "no"
+
+  s3:
+    image: localstack/localstack:3   # S3-compatible storage for rehearsal; production uses real S3
+    environment: { SERVICES: s3 }
+    healthcheck: { test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q '\"s3\": \"\\(available\\|running\\)\"'"], interval: 3s, timeout: 5s, retries: 30 }
+
+  s3-init:
+    image: amazon/aws-cli:latest
+    depends_on: { s3: { condition: service_healthy } }
+    environment: { AWS_ACCESS_KEY_ID: test, AWS_SECRET_ACCESS_KEY: test, AWS_DEFAULT_REGION: us-east-1 }
+    entrypoint: ["sh", "-c", "aws --endpoint-url http://s3:4566 s3 mb s3://jobsmato-files || true; aws --endpoint-url http://s3:4566 s3api put-bucket-versioning --bucket jobsmato-files --versioning-configuration Status=Enabled"]
+    restart: "no"
+
+  clamav:
+    image: clamav/clamav-debian:stable
+    volumes: ["clamdb:/var/lib/clamav"]
+    healthcheck: { test: ["CMD", "clamdcheck.sh"], interval: 15s, timeout: 10s, retries: 40, start_period: 120s }
+
+  mail:
+    image: axllent/mailpit:latest
+    ports: ["8025:8025"]   # web inbox
+
+  api:
+    build: { context: ., dockerfile: api/Dockerfile }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      s3-init: { condition: service_completed_successfully }
+      clamav: { condition: service_healthy }
+    environment: &apienv
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: "3000"
+      DATABASE_URL: postgres://jm_app:jm_app_pw@db:5432/jobsmato
+      DATABASE_URL_ADMIN: postgres://postgres:postgres@db:5432/jobsmato
+      WEB_ORIGIN: http://localhost:8080
+      IP_HASH_SALT: change-me-compose-ip-salt-0123456789
+      FILE_URL_SECRET: change-me-compose-file-secret-0123456789
+      STORAGE_DRIVER: s3
+      S3_BUCKET: jobsmato-files
+      S3_ENDPOINT: http://s3:4566
+      S3_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      SCANNER_DRIVER: clamav
+      CLAMAV_HOST: clamav
+      MAIL_DRIVER: smtp
+      SMTP_URL: smtp://mail:1025
+      MAIL_FROM: "JobsMato <no-reply@jobsmato.local>"
+
+  web:
+    build: { context: ., dockerfile: web/Dockerfile }
+    depends_on: [api]
+    ports: ["8080:80"]
+
+  tenant:
+    build: { context: ., dockerfile: api/Dockerfile }
+    profiles: ["tools"]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    environment: *apienv
+    entrypoint: ["node", "api/dist/create-tenant-cli.js"]
+
+volumes: { pgdata: {}, clamdb: {} }
