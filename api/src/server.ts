@@ -13,7 +13,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const storage = createStorage(config, root);
 const app = await buildApp({ config, db, mailer: createMailer(config), storage, scanner: createScanner(config) });
 
-const stopWorker = startWorker({ db, mailer: app.mailer, config, storage, log: (msg, extra) => app.log.info(extra ?? {}, msg) });
+// Vercel instances may pause between requests. Schedule worker-cli separately there.
+const stopWorker = process.env.VERCEL === '1'
+  ? () => {}
+  : startWorker({ db, mailer: app.mailer, config, storage, log: (msg, extra) => app.log.info(extra ?? {}, msg) });
 
 const shutdown = async () => {
   stopWorker();
