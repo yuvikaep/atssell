@@ -120,6 +120,16 @@ describe('production configuration for Vercel', () => {
     expect(loadConfig({ ...prod, SCANNER_DRIVER: 'http', SCANNER_URL: 'https://scan.example.com', SCANNER_TOKEN: 'token-0123456789abcdef' }).SCANNER_DRIVER).toBe('http');
     expect(() => loadConfig({ ...prod, SCANNER_DRIVER: 'dev' })).toThrow(/clamav/);
   });
+  it('uses a connected Vercel Blob store and the restricted app role', () => {
+    const vercel = { ...base, NODE_ENV: 'production', STORAGE_DRIVER: undefined, BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_x', DATABASE_URL: 'postgres://owner:secret@db.example.com/app?sslmode=require', APP_DB_PASSWORD: 'p@ss/word' };
+    const config = loadConfig(vercel);
+    expect(config.STORAGE_DRIVER).toBe('blob');
+    expect(new URL(config.DATABASE_URL).username).toBe('jm_app');
+    expect(decodeURIComponent(new URL(config.DATABASE_URL).password)).toBe('p@ss/word');
+    expect(config.DATABASE_URL).toContain('sslmode=require');
+    expect(() => loadConfig({ ...vercel, BLOB_READ_WRITE_TOKEN: undefined, STORAGE_DRIVER: 'blob' })).toThrow(/BLOB_READ_WRITE_TOKEN/);
+    expect(loadConfig({ ...vercel, SCANNER_DRIVER: 'none' }).SCANNER_DRIVER).toBe('none');
+  });
   it('limits the pool and validates the cron secret', () => {
     expect(loadConfig({ ...base, DB_POOL_MAX: '3' }).DB_POOL_MAX).toBe(3);
     expect(() => loadConfig({ ...base, DB_POOL_MAX: '0' })).toThrow();

@@ -67,6 +67,13 @@ export class DevScanner implements FileScanner {
 }
 
 /** SCANNER_DRIVER=off: nothing can be scanned, so no file is accepted. */
+/** No malware scan: files are still checked by content type, but nothing looks for viruses. Opt-in only. */
+export class NoScanScanner implements FileScanner {
+  async scan(): Promise<ScanResult> {
+    return 'clean';
+  }
+}
+
 export class OffScanner implements FileScanner {
   async scan(): Promise<ScanResult> {
     throw filesNotConfigured();

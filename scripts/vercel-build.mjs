@@ -17,7 +17,7 @@ run('npm run -w web build');
 
 // Optional: with the owner connection set for production builds only, bring the schema up to date
 // before this code goes live. Migrations are idempotent; a failed one fails the deployment.
-if (process.env.DATABASE_URL_ADMIN && process.env.VERCEL_ENV === 'production') {
+if ((process.env.DATABASE_URL_ADMIN || process.env.DATABASE_URL_UNPOOLED) && process.env.VERCEL_ENV === 'production') {
   run('npx tsx api/src/migrate-cli.ts');
 }
 

@@ -10,7 +10,31 @@ Import the repository as one Vercel project. Root Directory `./` (preferred) or 
 
 The build does not depend on the project's framework preset or output settings.
 
-## Database
+## Quick start (Vercel only, no outside services)
+
+1. **Import** the GitHub repository in Vercel (Root Directory `./`, leave the build settings as they are).
+2. **Storage → Create → Neon (Postgres)**, connect it to the project for **Production**. This adds
+   `DATABASE_URL` (pooled, owner) and `DATABASE_URL_UNPOOLED` (direct, owner).
+3. **Storage → Create → Blob**, connect it to the project. This adds `BLOB_READ_WRITE_TOKEN`;
+   resumes and exports are then stored as private blobs (`STORAGE_DRIVER` defaults to `blob`).
+4. **Settings → Environment Variables**, add (each value from `openssl rand -hex 32`):
+
+   | Variable | Value |
+   | --- | --- |
+   | `APP_DB_PASSWORD` | Password for the restricted `jm_app` role |
+   | `IP_HASH_SALT` | Random secret |
+   | `FILE_URL_SECRET` | Different random secret |
+   | `CRON_SECRET` | Random secret (Vercel sends it to the daily cron) |
+   | `SCANNER_DRIVER` | `none` to accept uploads without a virus scan (until a scanner is set up) |
+
+5. **Redeploy.** The production build creates or updates the `jm_app` role with
+   `APP_DB_PASSWORD`, applies migrations through `DATABASE_URL_UNPOOLED`, and the API then connects
+   as `jm_app` (the owner user in `DATABASE_URL` is swapped for it) so row-level security applies.
+
+Email stays off until `MAIL_DRIVER=smtp` is set (see below); feedback links are shown to copy.
+Then create the first company (see "First company/admin").
+
+## Database (manual setup)
 
 Connect Neon through Vercel Storage. A newly provisioned database has no application tables.
 Keep the owner connection for migrations/provisioning in a private operator environment as
@@ -65,7 +89,7 @@ that needs it is refused with a clear message (HTTP 503):
 
 | Service | Off means | To turn on |
 | --- | --- | --- |
-| File storage | Resume uploads and CSV exports are refused | `STORAGE_DRIVER=s3`, `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (plus `S3_ENDPOINT` for S3-compatible stores such as Cloudflare R2) |
+| File storage | Resume uploads and CSV exports are refused | A connected Vercel Blob store (`BLOB_READ_WRITE_TOKEN`), or `STORAGE_DRIVER=s3`, `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (plus `S3_ENDPOINT` for S3-compatible stores such as Cloudflare R2) |
 | Malware scanning | Uploads are refused (nothing unscanned is ever stored) | `SCANNER_DRIVER=clamav`, `CLAMAV_HOST`, `CLAMAV_PORT` (default 3310) |
 | Email | Invitations, feedback-request and notification emails are not sent (feedback links are still shown to copy); password reset requests are accepted but send nothing | `MAIL_DRIVER=smtp`, `SMTP_URL`, `MAIL_FROM` |
 

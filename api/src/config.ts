@@ -23,13 +23,15 @@ const ConfigSchema = z.object({
   FILE_URL_SECRET: z.string().min(16),
   // Outside services. Unset, they default to the development stubs, or to 'off' in production: an
   // 'off' service refuses the feature that needs it (uploads, exports, email) instead of the API failing to start.
-  STORAGE_DRIVER: z.enum(['local', 's3', 'off']).optional(),
+  // 'blob': Vercel Blob, private; the token is added by Vercel when a Blob store is connected.
+  STORAGE_DRIVER: z.enum(['local', 's3', 'blob', 'off']).optional(),
+  BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
   S3_BUCKET: z.string().min(1).optional(),
   S3_REGION: z.string().default('ap-south-1'),
   S3_ENDPOINT: z.string().url().optional(),
   S3_PREFIX: z.string().regex(/^([a-z0-9-]+\/)*$/i).default(''),
-  SCANNER_DRIVER: z.enum(['dev', 'clamav', 'http', 'off']).optional(),
-  // 'http': ClamAV behind scanner-service/ over HTTPS.
+  SCANNER_DRIVER: z.enum(['dev', 'clamav', 'http', 'none', 'off']).optional(),
+  // 'http': ClamAV behind scanner-service/ over HTTPS. 'none': accept files without a virus scan.
   SCANNER_URL: z.string().url().optional(),
   SCANNER_TOKEN: z.string().min(16).optional(),
   CLAMAV_HOST: z.string().default('127.0.0.1'),
@@ -51,10 +53,23 @@ export type Config = Omit<Parsed, 'STORAGE_DRIVER' | 'SCANNER_DRIVER' | 'MAIL_DR
 
 const vercelUrl = (host: string | undefined) => (host ? `https://${host}` : undefined);
 
+/**
+ * With APP_DB_PASSWORD set (hosted setups where DATABASE_URL is the provider's owner connection),
+ * connect as the restricted app role instead, so row-level security applies.
+ */
+function appRoleUrl(env: NodeJS.ProcessEnv) {
+  if (!env.DATABASE_URL || !env.APP_DB_PASSWORD) return env.DATABASE_URL;
+  const url = new URL(env.DATABASE_URL);
+  url.username = env.APP_DB_ROLE ?? 'jm_app';
+  url.password = env.APP_DB_PASSWORD;
+  return url.toString();
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const onVercel = env.VERCEL === '1';
   const parsed = ConfigSchema.parse({
     ...env,
+    DATABASE_URL: appRoleUrl(env),
     // A Vercel deployment is never a development machine: no local disk, no printed email links.
     NODE_ENV: env.NODE_ENV || (onVercel ? 'production' : undefined),
     WEB_ORIGIN: env.WEB_ORIGIN || (onVercel ? vercelUrl(env.VERCEL_PROJECT_PRODUCTION_URL) : undefined),
@@ -63,7 +78,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const config: Config = {
     ...parsed,
     WEB_ORIGIN: parsed.WEB_ORIGIN.replace(/\/+$/, ''),
-    STORAGE_DRIVER: parsed.STORAGE_DRIVER ?? (production ? 'off' : 'local'),
+    // A connected Vercel Blob store is used without further settings.
+    STORAGE_DRIVER: parsed.STORAGE_DRIVER ?? (parsed.BLOB_READ_WRITE_TOKEN ? 'blob' : production ? 'off' : 'local'),
     SCANNER_DRIVER: parsed.SCANNER_DRIVER ?? (production ? 'off' : 'dev'),
     MAIL_DRIVER: parsed.MAIL_DRIVER ?? (production ? 'off' : 'console'),
     ALLOWED_ORIGINS: [],
@@ -74,11 +90,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ...(onVercel ? [vercelUrl(env.VERCEL_URL), vercelUrl(env.VERCEL_BRANCH_URL)].filter((o): o is string => !!o) : []),
   ])];
   if (config.STORAGE_DRIVER === 's3' && !config.S3_BUCKET) throw new Error('S3_BUCKET is required when STORAGE_DRIVER=s3');
+  if (config.STORAGE_DRIVER === 'blob' && !config.BLOB_READ_WRITE_TOKEN) throw new Error('BLOB_READ_WRITE_TOKEN is required when STORAGE_DRIVER=blob (connect a Blob store in Vercel Storage)');
   if (config.MAIL_DRIVER === 'smtp' && (!config.SMTP_URL || !config.MAIL_FROM)) throw new Error('SMTP_URL and MAIL_FROM are required when MAIL_DRIVER=smtp');
   if (config.SCANNER_DRIVER === 'http' && (!config.SCANNER_URL || !config.SCANNER_TOKEN)) throw new Error('SCANNER_URL and SCANNER_TOKEN are required when SCANNER_DRIVER=http');
   if (config.NODE_ENV === 'production') {
     if (config.SCANNER_DRIVER === 'http' && !config.SCANNER_URL!.startsWith('https://')) throw new Error('SCANNER_URL must be https:// in production');
-    if (config.STORAGE_DRIVER === 'local') throw new Error('Production needs STORAGE_DRIVER=s3 (or off): local disk is for development');
+    if (config.STORAGE_DRIVER === 'local') throw new Error('Production needs STORAGE_DRIVER=s3 or blob (or off): local disk is for development');
     if (config.SCANNER_DRIVER === 'dev') throw new Error('Production needs SCANNER_DRIVER=clamav (or off): the dev scanner only catches the EICAR test file');
     if (config.MAIL_DRIVER === 'console') throw new Error('Production needs MAIL_DRIVER=smtp (or off): the console mailer prints live links');
     if (config.IP_HASH_SALT.startsWith('dev-only')) throw new Error('IP_HASH_SALT must be set to a random value in production');

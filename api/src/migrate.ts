@@ -21,11 +21,17 @@ const APPEND_ONLY_TABLES = [
  * role its table privileges. Must run as the schema owner. An applied migration whose file changed
  * is an error: write a new migration instead of editing an old one.
  */
-export async function migrate(adminUrl: string, appRole: string, log: (msg: string) => void = console.log) {
+export async function migrate(adminUrl: string, appRole: string, log: (msg: string) => void = console.log, appPassword?: string) {
   if (!/^[a-z_][a-z0-9_]*$/.test(appRole)) throw new Error(`invalid APP_DB_ROLE: ${appRole}`);
   const client = new pg.Client({ connectionString: adminUrl });
   await client.connect();
   try {
+    // With a password given, make sure the restricted login role exists and uses it (hosted setups).
+    if (appPassword) {
+      const exists = (await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [appRole])).rowCount;
+      const pw = (await client.query<{ q: string }>('SELECT quote_literal($1) AS q', [appPassword])).rows[0]!.q;
+      await client.query(`${exists ? 'ALTER' : 'CREATE'} ROLE "${appRole}" LOGIN NOBYPASSRLS PASSWORD ${pw}`);
+    }
     await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
       filename TEXT PRIMARY KEY,
       checksum TEXT NOT NULL,
