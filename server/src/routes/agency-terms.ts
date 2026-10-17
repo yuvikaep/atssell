@@ -1,6 +1,7 @@
 // Agency commercial terms (HR Lead) and the agency's own view of them, plus the agency's optional
 // sub-recruiters. Terms are versioned: a change adds a version and never edits an old one.
 import type { FastifyInstance } from 'fastify';
+import { inviteLinkToCopy } from '../mailer.js';
 import { z } from 'zod';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
@@ -125,7 +126,7 @@ export async function agencyTermsRoutes(app: FastifyInstance) {
       return { inv, token, roleName: role.name };
     });
     await app.mailer.sendInvitation({ to: sent.inv.email, companyName: p.tenantName, inviterName: p.fullName, roleName: sent.roleName, link: `${config.WEB_ORIGIN}/invite#${sent.token}`, expiresAt: sent.inv.expires_at });
-    return reply.status(201).send({ data: sent.inv });
+    return reply.status(201).send({ data: { ...sent.inv, invite_link: inviteLinkToCopy(config, sent.token) } });
   });
 
   app.patch('/agency/team/:id', async (req) => {

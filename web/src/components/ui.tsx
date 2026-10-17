@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError, fieldIssues } from '../api';
 
 export function Loading({ label = 'Loading…' }: { label?: string }) {
@@ -147,4 +147,19 @@ export function Tags({ items }: { items: string[] }) {
 
 export function BackLink({ to, children }: { to: '/requisitions' | '/vacancies' | '/candidates' | '/pipeline' | '/interviews' | '/my-interviews' | '/offers'; children: ReactNode }) {
   return <Link className="back-link" to={to}>← {children}</Link>;
+}
+
+/** While email is off, the API returns the invitation link for the inviter to share themselves. */
+export function InviteLinkNotice({ link, email }: { link?: string | null; email?: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!link) return null;
+  return (
+    <div className="alert alert-success" role="status">
+      <p style={{ margin: '0 0 8px' }}>Email is not set up, so send this sign-up link to {email ?? 'them'} yourself (WhatsApp, chat). They open it and choose their own password.</p>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input readOnly value={link} aria-label="Invitation link" onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0 }} />
+        <button className="btn" type="button" onClick={async () => { await navigator.clipboard?.writeText(link); setCopied(true); }}>{copied ? 'Copied' : 'Copy'}</button>
+      </div>
+    </div>
+  );
 }

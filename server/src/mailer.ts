@@ -133,3 +133,11 @@ export class MemoryMailer implements Mailer {
     if (this.failing) throw new Error('mail provider unavailable');
   }
 }
+
+/**
+ * While email is off, the inviter is shown the invitation link to pass on themselves (as with
+ * feedback links). With SMTP on, the link only goes to the invitee's inbox.
+ */
+export function inviteLinkToCopy(config: { MAIL_DRIVER: string; WEB_ORIGIN: string }, token: string) {
+  return config.MAIL_DRIVER === 'smtp' ? null : `${config.WEB_ORIGIN}/invite#${token}`;
+}

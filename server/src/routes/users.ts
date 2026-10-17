@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { inviteLinkToCopy } from '../mailer.js';
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { principal } from '../app.js';
@@ -329,6 +330,7 @@ export async function userRoutes(app: FastifyInstance) {
       link: `${config.WEB_ORIGIN}/invite#${token}`,
       expiresAt,
     });
+    return inviteLinkToCopy(config, token);
   }
 
   app.post('/users/invitations', async (req, reply) => {
@@ -359,8 +361,8 @@ export async function userRoutes(app: FastifyInstance) {
     });
 
     // Sent after commit. If sending fails the invitation still exists and can be resent.
-    await sendInvitationEmail(p, result.inv.email, result.roleName, result.token, result.inv.expires_at);
-    return reply.status(201).send({ data: result.inv });
+    const invite_link = await sendInvitationEmail(p, result.inv.email, result.roleName, result.token, result.inv.expires_at);
+    return reply.status(201).send({ data: { ...result.inv, invite_link } });
   });
 
   app.post('/users/invitations/:id/revoke', async (req, reply) => {
@@ -422,7 +424,7 @@ export async function userRoutes(app: FastifyInstance) {
       return { inv, token, roleName: role.name };
     });
 
-    await sendInvitationEmail(p, result.inv.email, result.roleName, result.token, result.inv.expires_at);
-    return reply.status(201).send({ data: result.inv });
+    const invite_link = await sendInvitationEmail(p, result.inv.email, result.roleName, result.token, result.inv.expires_at);
+    return reply.status(201).send({ data: { ...result.inv, invite_link } });
   });
 }

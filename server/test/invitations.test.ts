@@ -111,3 +111,13 @@ describe('invitations', () => {
     expect(list.find((i: { email: string }) => i.email === 'expired@inv.test').expired).toBe(true);
   });
 });
+
+describe('invitation link to share while email is off', () => {
+  it('is returned to the inviter, and only when email is not set up', async () => {
+    const { res } = await invite('share.link@inv.test');
+    expect(res.json().data.invite_link).toBe(ctx.mailer.invitations.at(-1)!.link);
+    const { inviteLinkToCopy } = await import('../src/mailer.js');
+    expect(inviteLinkToCopy({ MAIL_DRIVER: 'smtp', WEB_ORIGIN: 'https://a.test' }, 't')).toBeNull();
+    expect(inviteLinkToCopy({ MAIL_DRIVER: 'off', WEB_ORIGIN: 'https://a.test' }, 't')).toBe('https://a.test/invite#t');
+  });
+});

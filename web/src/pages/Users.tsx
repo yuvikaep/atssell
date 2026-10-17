@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useState, type FormEvent } from 'react';
 import { api, canAll, type Invitation, type UserRow } from '../api';
 import { useMe } from '../components/AppShell';
-import { Dialog, EmptyState, ErrorState, Field, fieldError, Forbidden, formatDate, FormError, Loading, StatusBadge } from '../components/ui';
+import { Dialog, EmptyState, ErrorState, Field, fieldError, Forbidden, formatDate, FormError, Loading, StatusBadge, InviteLinkNotice } from '../components/ui';
 import { departmentsQuery, invitationsQuery, rolesQuery, usersQuery } from '../queries';
 import { useSessionState } from '../session-storage';
 
@@ -14,6 +14,7 @@ export function UsersPage() {
   const allowed = canAll(me, 'users.manage');
   const [tab, setTab] = useSessionState('jm.users.tab', 'users', TABS);
   const [inviting, setInviting] = useState(false);
+  const [inviteLink, setInviteLink] = useState<{ link?: string | null; email: string } | null>(null);
   const invitations = useQuery({ ...invitationsQuery, enabled: allowed });
 
   if (!allowed) return <Forbidden />;
@@ -39,7 +40,8 @@ export function UsersPage() {
         {tab === 'users' ? <UsersTab /> : <InvitationsTab query={invitations} onInvite={() => setInviting(true)} />}
       </div>
 
-      {inviting && <InviteDialog onClose={() => setInviting(false)} onSent={() => setTab('invitations')} />}
+      {inviting && <InviteDialog onClose={() => setInviting(false)} onSent={(l) => { setInviteLink(l); setTab('invitations'); }} />}
+      <InviteLinkNotice link={inviteLink?.link} email={inviteLink?.email} />
     </>
   );
 }
@@ -121,10 +123,12 @@ function UsersTab() {
 function InvitationsTab({ query, onInvite }: { query: ReturnType<typeof useQuery<Invitation[]>>; onInvite: () => void }) {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
+  const [resendLink, setResendLink] = useState<{ link: string; email: string } | null>(null);
   const action = useMutation({
     mutationFn: ({ id, kind }: { id: string; kind: 'resend' | 'revoke'; email: string }) =>
-      api('POST', `/users/invitations/${id}/${kind}`),
-    onSuccess: async (_d, v) => {
+      api<{ data: { invite_link?: string | null } } | undefined>('POST', `/users/invitations/${id}/${kind}`),
+    onSuccess: async (d, v) => {
+      setResendLink(d?.data?.invite_link ? { link: d.data.invite_link, email: v.email } : null);
       setNotice(v.kind === 'resend' ? `New invitation sent to ${v.email}.` : `Invitation for ${v.email} revoked.`);
       await queryClient.invalidateQueries({ queryKey: ['invitations'] });
     },
@@ -139,7 +143,7 @@ function InvitationsTab({ query, onInvite }: { query: ReturnType<typeof useQuery
     <>
       {(notice || action.error) && (
         <div style={{ padding: '12px 12px 0' }}>
-          {action.error ? <FormError error={action.error} /> : <div className="alert alert-success">{notice}</div>}
+          {action.error ? <FormError error={action.error} /> : resendLink ? <InviteLinkNotice link={resendLink.link} email={resendLink.email} /> : <div className="alert alert-success">{notice}</div>}
         </div>
       )}
       <div className="table-wrap">
@@ -171,7 +175,7 @@ function RoleAndDepartmentOptions() {
   return { roles: (roles.data ?? []).filter((r) => r.invitable), departments: departments.data ?? [] };
 }
 
-function InviteDialog({ onClose, onSent }: { onClose: () => void; onSent: () => void }) {
+function InviteDialog({ onClose, onSent }: { onClose: () => void; onSent: (l: { link?: string | null; email: string }) => void }) {
   const queryClient = useQueryClient();
   const { roles, departments } = RoleAndDepartmentOptions();
   const [email, setEmail] = useState('');
@@ -179,10 +183,10 @@ function InviteDialog({ onClose, onSent }: { onClose: () => void; onSent: () => 
   const [departmentId, setDepartmentId] = useState('');
 
   const invite = useMutation({
-    mutationFn: () => api('POST', '/users/invitations', { email, role_code: roleCode, department_id: departmentId || null }),
-    onSuccess: async () => {
+    mutationFn: () => api<{ data: { invite_link?: string | null } }>('POST', '/users/invitations', { email, role_code: roleCode, department_id: departmentId || null }),
+    onSuccess: async (r) => {
       await queryClient.invalidateQueries({ queryKey: ['invitations'] });
-      onSent();
+      onSent({ link: r.data.invite_link, email });
       onClose();
     },
   });

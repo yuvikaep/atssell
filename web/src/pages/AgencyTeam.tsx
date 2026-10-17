@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { api } from '../api';
-import { Badge, EmptyState, ErrorState, Field, FormError, Loading, StatusBadge } from '../components/ui';
+import { Badge, EmptyState, ErrorState, Field, FormError, Loading, StatusBadge, InviteLinkNotice } from '../components/ui';
 import { TermsPanel } from '../components/TermsPanel';
 
 interface Team { members: { user_id: string; full_name: string; email: string; status: 'active' | 'inactive'; agency_role: 'admin' | 'recruiter' }[]; invitations: { id: string; email: string; expired: boolean }[] }
@@ -12,9 +12,10 @@ export function AgencyTeamPage() {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState<string | null>(null);
+  const [link, setLink] = useState<string | null>(null);
   const invite = useMutation({
-    mutationFn: () => api('POST', '/agency/team/invitations', { email }),
-    onSuccess: async () => { setSent(email); setEmail(''); await queryClient.invalidateQueries({ queryKey: ['agency-team'] }); },
+    mutationFn: () => api<{ data: { invite_link?: string | null } }>('POST', '/agency/team/invitations', { email }),
+    onSuccess: async (r) => { setSent(email); setLink(r.data.invite_link ?? null); setEmail(''); await queryClient.invalidateQueries({ queryKey: ['agency-team'] }); },
   });
   const toggle = useMutation({
     mutationFn: (m: { user_id: string; status: string }) => api('PATCH', `/agency/team/${m.user_id}`, { status: m.status === 'active' ? 'inactive' : 'active' }),
@@ -27,7 +28,7 @@ export function AgencyTeamPage() {
       <form className="card section" onSubmit={submit} style={{ marginBottom: 16 }}>
         <h2>Invite a sub-recruiter</h2>
         <FormError error={invite.error} />
-        {sent && <div className="alert alert-success" role="status">Invitation sent to {sent}.</div>}
+        {sent && (link ? <InviteLinkNotice link={link} email={sent} /> : <div className="alert alert-success" role="status">Invitation sent to {sent}.</div>)}
         <div className="filters" style={{ padding: 0 }}>
           <Field id="team-email" label="Work email"><input id="team-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
           <button className="btn btn-primary" type="submit" disabled={invite.isPending || !email}>Send invitation</button>

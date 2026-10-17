@@ -4,7 +4,7 @@ import { Link, useParams } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
 import { api, ApiError, can } from '../api';
 import { useMe } from '../components/AppShell';
-import { Badge, Dialog, EmptyState, ErrorState, Field, fieldError, Forbidden, FormError, formatDate, Loading, StatusBadge } from '../components/ui';
+import { Badge, Dialog, EmptyState, ErrorState, Field, fieldError, Forbidden, FormError, formatDate, Loading, StatusBadge, InviteLinkNotice } from '../components/ui';
 import { agencyMembersQuery } from '../queries';
 
 const ROLE_LABEL = { admin: 'Agency admin', recruiter: 'Agency recruiter' } as const;
@@ -17,6 +17,7 @@ export function AgencyDetailPage() {
   const queryClient = useQueryClient();
   const [inviting, setInviting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<{ link?: string | null; email: string } | null>(null);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['agency-members', id] });
 
   const update = useMutation({
@@ -25,8 +26,8 @@ export function AgencyDetailPage() {
     onSuccess: refresh,
   });
   const inviteAction = useMutation({
-    mutationFn: ({ invitationId, kind }: { invitationId: string; kind: 'resend' | 'revoke'; email: string }) => api('POST', `/users/invitations/${invitationId}/${kind}`),
-    onSuccess: async (_d, v) => { setNotice(v.kind === 'resend' ? `New invitation sent to ${v.email}.` : `Invitation for ${v.email} revoked.`); await refresh(); },
+    mutationFn: ({ invitationId, kind }: { invitationId: string; kind: 'resend' | 'revoke'; email: string }) => api<{ data: { invite_link?: string | null } } | undefined>('POST', `/users/invitations/${invitationId}/${kind}`),
+    onSuccess: async (d, v) => { setInviteLink({ link: d?.data?.invite_link, email: v.email }); setNotice(v.kind === 'resend' ? `New invitation sent to ${v.email}.` : `Invitation for ${v.email} revoked.`); await refresh(); },
   });
 
   if (!allowed) return <Forbidden />;
@@ -51,6 +52,7 @@ export function AgencyDetailPage() {
 
       {(update.error || inviteAction.error) && <FormError error={update.error ?? inviteAction.error} />}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
+      <InviteLinkNotice link={inviteLink?.link} email={inviteLink?.email} />
 
       <TermsPanel agencyId={agency.id} />
 
@@ -108,18 +110,18 @@ export function AgencyDetailPage() {
           </div>
         </div>
       )}
-      {inviting && <InviteDialog agencyId={id} onClose={() => setInviting(false)} />}
+      {inviting && <InviteDialog agencyId={id} onClose={() => setInviting(false)} onSent={setInviteLink} />}
     </>
   );
 }
 
-function InviteDialog({ agencyId, onClose }: { agencyId: string; onClose: () => void }) {
+function InviteDialog({ agencyId, onClose, onSent }: { agencyId: string; onClose: () => void; onSent: (l: { link?: string | null; email: string }) => void }) {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'admin' | 'recruiter'>('admin');
   const invite = useMutation({
-    mutationFn: () => api('POST', `/agencies/${agencyId}/invitations`, { email, agency_role: role }),
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['agency-members', agencyId] }); onClose(); },
+    mutationFn: () => api<{ data: { invite_link?: string | null } }>('POST', `/agencies/${agencyId}/invitations`, { email, agency_role: role }),
+    onSuccess: async (r) => { onSent({ link: r.data.invite_link, email }); await queryClient.invalidateQueries({ queryKey: ['agency-members', agencyId] }); onClose(); },
   });
   const submit = (e: FormEvent) => { e.preventDefault(); invite.mutate(); };
   return (

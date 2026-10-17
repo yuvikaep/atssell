@@ -1,5 +1,6 @@
 // Company-side management of an agency's people. Agency users only ever reach /agency/* (agency-portal.ts).
 import type { FastifyInstance } from 'fastify';
+import { inviteLinkToCopy } from '../mailer.js';
 import { z } from 'zod';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
@@ -101,7 +102,7 @@ export async function agencyMemberRoutes(app: FastifyInstance) {
       to: sent.inv.email, companyName: p.tenantName, inviterName: p.fullName, roleName: sent.roleName,
       link: `${config.WEB_ORIGIN}/invite#${sent.token}`, expiresAt: sent.inv.expires_at,
     });
-    return reply.status(201).send({ data: sent.inv });
+    return reply.status(201).send({ data: { ...sent.inv, invite_link: inviteLinkToCopy(config, sent.token) } });
   });
 
   // Change an agency member's role (admin or recruiter) or deactivate or reactivate them.
