@@ -95,12 +95,22 @@ node api/dist/create-tenant-cli.js --name "Your Company" --slug your-company --a
 Use the printed one-time password setup link privately. Do not run this from deployment
 build logs, where the token could be exposed. No public database setup endpoint is added.
 
+## Vercel-specific settings (added)
+
+| Variable | Value |
+| --- | --- |
+| `DB_POOL_MAX` | `3` (use Neon's **pooled** `-pooler` URL for `DATABASE_URL`) |
+| `CRON_SECRET` | Random 32+ chars. Enables `/api/v1/cron/worker`, which `vercel.json` calls daily |
+| `ALLOWED_ORIGINS` | Optional extra origins, e.g. a custom domain |
+| `SCANNER_DRIVER=http`, `SCANNER_URL`, `SCANNER_TOKEN` | ClamAV via `scanner-service/` over HTTPS (Vercel cannot reach clamd directly) |
+
+- Background work runs after signed-in requests (at most once a minute per company) plus the daily cron. On a Pro plan change the cron schedule to `* * * * *`.
+- Resume uploads are capped at 4 MB on Vercel (its request limit is 4.5 MB); the form shows the limit.
+- Run migrations with the **Migrate database** GitHub Action (secret `DATABASE_URL_ADMIN`) before deploying.
+
 ## Background jobs and validation
 
-On Vercel the API's in-process timer is disabled. Schedule
-`node api/dist/worker-cli.js` separately every minute with the API environment,
-using a trusted scheduler/worker runtime with the repo and dependencies installed.
-Until configured, queued emails, reminders and exports will not process automatically.
+On Vercel the in-process timer is off; the worker runs from traffic and the cron above.
 
 Verify `/health`, direct navigation to `/login`, login using the company code, tenant
 isolation, uploads/downloads and email delivery. Vercel Function request-body limits

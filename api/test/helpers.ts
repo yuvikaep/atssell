@@ -38,18 +38,19 @@ export interface TestContext {
   close(): Promise<void>;
 }
 
-export async function setupApp(): Promise<TestContext> {
+export async function setupApp(opts: { env?: Record<string, string>; afterAuthenticatedRequest?: (tenantId: string) => void } = {}): Promise<TestContext> {
   const config = loadConfig({
     ...process.env,
     NODE_ENV: 'test',
     DATABASE_URL: process.env.TEST_DATABASE_URL,
     WEB_ORIGIN,
+    ...opts.env,
   });
   const appDb = createDb(config.DATABASE_URL, 5);
   const adminDb = createDb(process.env.TEST_DATABASE_URL_ADMIN!, 2);
   const mailer = new MemoryMailer();
   const storage = new MemoryStorage();
-  const app = await buildApp({ config, db: appDb, mailer, storage, scanner: new DevScanner('test'), logger: false });
+  const app = await buildApp({ config, db: appDb, mailer, storage, scanner: new DevScanner('test'), logger: false, afterAuthenticatedRequest: opts.afterAuthenticatedRequest });
   return {
     app,
     storage,

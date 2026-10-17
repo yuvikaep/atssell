@@ -6,6 +6,7 @@ import type { Config } from '../config.js';
 import { ConsoleMailer, OffMailer, type Mailer } from '../mailer.js';
 import { DevScanner, LocalDiskStorage, OffScanner, OffStorage, type FileScanner, type ObjectStorage } from '../storage.js';
 import { ClamAvScanner } from './clamav.js';
+import { HttpScanner } from './http-scanner.js';
 import { S3Storage } from './s3.js';
 import { SmtpMailer } from './smtp.js';
 
@@ -20,6 +21,7 @@ export function createStorage(config: Config, repoRoot: string): ObjectStorage {
 
 export function createScanner(config: Config): FileScanner {
   if (config.SCANNER_DRIVER === 'clamav') return new ClamAvScanner({ host: config.CLAMAV_HOST, port: config.CLAMAV_PORT });
+  if (config.SCANNER_DRIVER === 'http') return new HttpScanner({ url: config.SCANNER_URL!, token: config.SCANNER_TOKEN! });
   if (config.SCANNER_DRIVER === 'off') return new OffScanner();
   return new DevScanner(config.NODE_ENV);
 }

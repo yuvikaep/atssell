@@ -1,0 +1,16 @@
+# ClamAV plus its HTTPS-facing front. Run on any small server or container host with TLS in front
+# (for example Fly.io, Render or Railway), then point the API at it:
+#   SCANNER_DRIVER=http  SCANNER_URL=https://<host>/scan  SCANNER_TOKEN=<same token>
+services:
+  clamav:
+    image: clamav/clamav-debian:stable
+    volumes: ["clamdb:/var/lib/clamav"]
+    healthcheck: { test: ["CMD", "clamdcheck.sh"], interval: 15s, timeout: 10s, retries: 40, start_period: 120s }
+  scanner:
+    build: .
+    depends_on: { clamav: { condition: service_healthy } }
+    environment:
+      SCANNER_TOKEN: ${SCANNER_TOKEN:?set SCANNER_TOKEN}
+      CLAMD_HOST: clamav
+    ports: ["8080:8080"]
+volumes: { clamdb: {} }

@@ -16,6 +16,7 @@ import { leaderboardRoutes } from './routes/leaderboards.js';
 import { employmentRoutes } from './routes/employment.js';
 import { ownershipCorrectionRoutes } from './routes/ownership-correction.js';
 import { agencyTermsRoutes } from './routes/agency-terms.js';
+import { cronRoutes } from './routes/cron.js';
 import { jobRoutes } from './routes/jobs.js';
 import { hiringHomeRoutes } from './routes/hiring-home.js';
 import { offerRoutes } from './routes/offers.js';
@@ -62,6 +63,8 @@ export interface AppDeps {
   storage: ObjectStorage;
   scanner: FileScanner;
   logger?: boolean;
+  /** Called after each signed-in request. Serverless hosting uses it to run background work. */
+  afterAuthenticatedRequest?: (tenantId: string) => void;
 }
 
 /** The authenticated principal; only call inside routes registered under the authenticated scope. */
@@ -70,7 +73,7 @@ export function principal(req: FastifyRequest): Principal {
   return req.principal;
 }
 
-export async function buildApp({ config, db, mailer, storage, scanner, logger = true }: AppDeps): Promise<FastifyInstance> {
+export async function buildApp({ config, db, mailer, storage, scanner, logger = true, afterAuthenticatedRequest }: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
     logger: logger && {
       level: config.NODE_ENV === 'production' ? 'info' : 'debug',
@@ -114,7 +117,8 @@ export async function buildApp({ config, db, mailer, storage, scanner, logger = 
   );
 
   app.addHook('onSend', async (_req, reply) => {
-    reply.header('cache-control', 'no-store');
+    // Reference lists (such as locations) set their own caching; everything else is never stored.
+    if (!reply.hasHeader('cache-control')) reply.header('cache-control', 'no-store');
     reply.header('x-request-id', _req.id);
   });
 
@@ -136,6 +140,7 @@ export async function buildApp({ config, db, mailer, storage, scanner, logger = 
       await api.register(authRoutes);
       await api.register(invitationPublicRoutes);
       await api.register(fileRoutes);
+      await api.register(cronRoutes);
       await api.register(publicFeedbackRoutes);
 
       // Authenticated routes.
@@ -150,6 +155,7 @@ export async function buildApp({ config, db, mailer, storage, scanner, logger = 
           if (!p) throw unauthenticated();
           req.principal = p;
         });
+        if (afterAuthenticatedRequest) authed.addHook('onResponse', async (req) => { if (req.principal) afterAuthenticatedRequest(req.principal.tenantId); });
         await authed.register(meRoutes);
         await authed.register(departmentRoutes);
         await authed.register(userRoutes);

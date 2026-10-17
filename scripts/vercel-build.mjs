@@ -54,6 +54,8 @@ const securityHeaders = {
 };
 await writeFile(path.join(out, 'config.json'), JSON.stringify({
   version: 3,
+  // Runs the worker once a day (allowed on every plan); on Pro use '* * * * *'. Needs CRON_SECRET.
+  crons: [{ path: '/api/v1/cron/worker', schedule: '0 3 * * *' }],
   routes: [
     { src: '^/(.*)$', headers: securityHeaders, continue: true },
     // The API keeps its own paths; the function restores them from __path.

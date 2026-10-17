@@ -12,6 +12,7 @@ import { pgConstraint, pgErrorCode, withTenant, type Tx } from '../db.js';
 import { AppError, forbidden, notFound } from '../errors.js';
 import { agencyOwnershipView, existingJobSubmission, lockContacts, lockJobCandidate, logDuplicateAttempt, recordOwnershipEvent } from '../ownership.js';
 import { requirePermission, type Principal } from '../permissions.js';
+import { resumeLimit } from '../limits.js';
 import { notifyUser } from '../notifications.js';
 import { detectResumeType, signFileToken } from '../storage.js';
 import { pageQuery } from './common.js';
@@ -291,7 +292,7 @@ export async function agencyPortalRoutes(app: FastifyInstance) {
     const maxBytes = await withTenant(db, p.tenantId, async (tx) => {
       await agencyContext(tx, p);
       const s = await tx.selectFrom('tenant_settings').select('resume_max_bytes').executeTakeFirst();
-      return s?.resume_max_bytes ?? 10 * 1024 * 1024;
+      return resumeLimit(s?.resume_max_bytes);
     });
 
     const part = await req.file({ limits: { fileSize: maxBytes, files: 1 } });

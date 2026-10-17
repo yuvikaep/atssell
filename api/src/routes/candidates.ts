@@ -9,6 +9,7 @@ import { withTenant, type Tx } from '../db.js';
 import { AppError, forbidden, notFound } from '../errors.js';
 import { candidateOwner, lockContacts } from '../ownership.js';
 import { can, requirePermission, type Principal } from '../permissions.js';
+import { resumeLimit } from '../limits.js';
 import { sendExport } from './exports.js';
 import { detectResumeType, signFileToken, verifyFileToken } from '../storage.js';
 import { normalizePhone, phoneSchema } from '../phone.js';
@@ -377,7 +378,7 @@ export async function candidateRoutes(app: FastifyInstance) {
     const maxBytes = await withTenant(db, p.tenantId, async (tx) => {
       await loadVisibleCandidate(tx, p, id, await agencyIdOf(tx, p.userId));
       const s = await tx.selectFrom('tenant_settings').select('resume_max_bytes').executeTakeFirst();
-      return s?.resume_max_bytes ?? 10 * 1024 * 1024;
+      return resumeLimit(s?.resume_max_bytes);
     });
 
     const part = await req.file({ limits: { fileSize: maxBytes, files: 1 } });

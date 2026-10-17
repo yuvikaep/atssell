@@ -8,6 +8,12 @@ const ConfigSchema = z.object({
   DATABASE_URL: z.string().min(1),
   // On Vercel it defaults to the project's production domain.
   WEB_ORIGIN: z.string().url(),
+  // Extra origins (comma separated), e.g. a custom domain.
+  EXTRA_ORIGINS: z.string().optional(),
+  // Connections per API instance; keep small on serverless.
+  DB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
+  // Enables /cron/worker for a scheduler (Vercel Cron sends it as a Bearer token).
+  CRON_SECRET: z.string().min(16).optional(),
   SESSION_TTL_HOURS: z.coerce.number().positive().default(12),
   INVITATION_TTL_HOURS: z.coerce.number().positive().default(72),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().positive().default(60),
@@ -22,7 +28,10 @@ const ConfigSchema = z.object({
   S3_REGION: z.string().default('ap-south-1'),
   S3_ENDPOINT: z.string().url().optional(),
   S3_PREFIX: z.string().regex(/^([a-z0-9-]+\/)*$/i).default(''),
-  SCANNER_DRIVER: z.enum(['dev', 'clamav', 'off']).optional(),
+  SCANNER_DRIVER: z.enum(['dev', 'clamav', 'http', 'off']).optional(),
+  // 'http': ClamAV behind scanner-service/ over HTTPS.
+  SCANNER_URL: z.string().url().optional(),
+  SCANNER_TOKEN: z.string().min(16).optional(),
   CLAMAV_HOST: z.string().default('127.0.0.1'),
   CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
   MAIL_DRIVER: z.enum(['console', 'smtp', 'off']).optional(),
@@ -61,11 +70,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   };
   config.ALLOWED_ORIGINS = [...new Set([
     config.WEB_ORIGIN,
+    ...(config.EXTRA_ORIGINS ?? '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean),
     ...(onVercel ? [vercelUrl(env.VERCEL_URL), vercelUrl(env.VERCEL_BRANCH_URL)].filter((o): o is string => !!o) : []),
   ])];
   if (config.STORAGE_DRIVER === 's3' && !config.S3_BUCKET) throw new Error('S3_BUCKET is required when STORAGE_DRIVER=s3');
   if (config.MAIL_DRIVER === 'smtp' && (!config.SMTP_URL || !config.MAIL_FROM)) throw new Error('SMTP_URL and MAIL_FROM are required when MAIL_DRIVER=smtp');
+  if (config.SCANNER_DRIVER === 'http' && (!config.SCANNER_URL || !config.SCANNER_TOKEN)) throw new Error('SCANNER_URL and SCANNER_TOKEN are required when SCANNER_DRIVER=http');
   if (config.NODE_ENV === 'production') {
+    if (config.SCANNER_DRIVER === 'http' && !config.SCANNER_URL!.startsWith('https://')) throw new Error('SCANNER_URL must be https:// in production');
     if (config.STORAGE_DRIVER === 'local') throw new Error('Production needs STORAGE_DRIVER=s3 (or off): local disk is for development');
     if (config.SCANNER_DRIVER === 'dev') throw new Error('Production needs SCANNER_DRIVER=clamav (or off): the dev scanner only catches the EICAR test file');
     if (config.MAIL_DRIVER === 'console') throw new Error('Production needs MAIL_DRIVER=smtp (or off): the console mailer prints live links');

@@ -1,0 +1,25 @@
+# Runs database migrations against production on demand, so the owner connection never sits in Vercel.
+# Add the repository secret DATABASE_URL_ADMIN (Neon direct, unpooled, owner role) and run this
+# workflow from the Actions tab before deploying code that needs a new migration.
+name: Migrate database
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "migrate" to run against the production database'
+        required: true
+jobs:
+  migrate:
+    if: ${{ github.event.inputs.confirm == 'migrate' }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DATABASE_URL_ADMIN: ${{ secrets.DATABASE_URL_ADMIN }}
+      APP_DB_ROLE: jm_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run -w api build
+      - run: node api/dist/migrate-cli.js

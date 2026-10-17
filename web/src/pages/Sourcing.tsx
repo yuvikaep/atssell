@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearch } from '@tanstack/react-router';
 import { useDeferredValue, useState, type FormEvent } from 'react';
 import { api, ApiError, SOURCE_LABEL, upload, type DuplicateMatch } from '../api';
+import { useMe } from '../components/AppShell';
 import { AddCandidateDialog } from '../components/PipelineBoard';
 import { candidateBody, CandidateFormFields, emptyCandidateForm, type CandidateForm } from '../components/CandidateForm';
 import { ScheduleDialog } from '../components/ScheduleDialog';
@@ -77,6 +78,9 @@ function CandidateStep({ jobId, jobTitle, onChangeJob, onAdded }: { jobId: strin
   const [file, setFile] = useState<File | null>(null);
   const [source, setSource] = useState('internal_recruiter');
   const [finding, setFinding] = useState(false);
+  const me = useMe();
+  const maxBytes = me.limits?.resume_max_bytes ?? 10 * 1024 * 1024;
+  const maxMb = Math.floor((maxBytes / (1024 * 1024)) * 10) / 10;
   const deferred = useDeferredValue({ name: form.full_name.trim(), email: form.email.trim(), phone: form.phone.trim() });
   const refresh = () => Promise.all(['candidate-status', 'hiring-home', 'candidates', 'applications', 'pipeline'].map((k) => queryClient.invalidateQueries({ queryKey: [k] })));
 
@@ -131,12 +135,12 @@ function CandidateStep({ jobId, jobTitle, onChangeJob, onAdded }: { jobId: strin
             {['internal_recruiter', 'referral', 'direct', 'job_board', 'other'].map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
           </select>
         </Field>
-        <Field id="src-resume" label="Resume" hint="PDF, DOC or DOCX, up to 25 MB.">
+        <Field id="src-resume" label="Resume" hint={`PDF, DOC or DOCX, up to ${maxMb} MB.`} error={file && file.size > maxBytes ? `This file is larger than ${maxMb} MB.` : undefined}>
           <input id="src-resume" type="file" accept=".pdf,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         </Field>
       </div>
       <div className="actions-row" style={{ marginTop: 8 }}>
-        <button className="btn btn-primary" type="submit" disabled={save.isPending || !form.full_name.trim() || (!form.email.trim() && !form.phone.trim()) || exact.length > 0}>{save.isPending ? 'Adding…' : 'Add to this job'}</button>
+        <button className="btn btn-primary" type="submit" disabled={save.isPending || !form.full_name.trim() || (!form.email.trim() && !form.phone.trim()) || exact.length > 0 || (!!file && file.size > maxBytes)}>{save.isPending ? 'Adding…' : 'Add to this job'}</button>
         <button className="btn" type="button" onClick={() => setFinding(true)}>Find someone already in the database</button>
       </div>
       {finding && <AddCandidateDialog vacancyId={jobId} onClose={() => { setFinding(false); refresh(); }} />}

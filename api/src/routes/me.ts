@@ -5,6 +5,7 @@ import { principal } from '../app.js';
 import { audit } from '../audit.js';
 import { withTenant } from '../db.js';
 import { AppError } from '../errors.js';
+import { resumeLimit } from '../limits.js';
 import { hashPassword, verifyPassword } from '../security.js';
 import { passwordSchema } from './common.js';
 
@@ -13,8 +14,10 @@ const ChangePasswordBody = z.object({ current_password: z.string().min(1, 'Enter
 export async function meRoutes(app: FastifyInstance) {
   app.get('/me', async (req) => {
     const p = principal(req);
+    const settings = await withTenant(app.db, p.tenantId, (tx) => tx.selectFrom('tenant_settings').select('resume_max_bytes').executeTakeFirst());
     return {
       data: {
+        limits: { resume_max_bytes: resumeLimit(settings?.resume_max_bytes) },
         user: { id: p.userId, email: p.email, full_name: p.fullName },
         tenant: { id: p.tenantId, name: p.tenantName, slug: p.tenantSlug },
         roles: p.roles.map((r) => ({ code: r.code, name: r.name, department_id: r.departmentId })),

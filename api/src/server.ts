@@ -19,7 +19,7 @@ if (config) await start(config);
 else await serveMisconfigured(configError);
 
 async function start(config: Config) {
-  const db = createDb(config.DATABASE_URL);
+  const db = createDb(config.DATABASE_URL, config.DB_POOL_MAX);
   // Production refuses local disk, the dev scanner and the console mailer (see loadConfig).
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const storage = createStorage(config, root);
