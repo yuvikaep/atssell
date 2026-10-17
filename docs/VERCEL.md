@@ -36,28 +36,42 @@ in parallel preview builds. Do not connect previews to the production database.
 
 ## API environment variables
 
-Configure these in Vercel for the intended deployment environment:
+The API starts with just these. Set them in Vercel for the intended deployment environment:
 
 | Variable | Value |
 | --- | --- |
-| `NODE_ENV` | `production` |
 | `DATABASE_URL` | Neon connection for the restricted `jm_app` role |
-| `WEB_ORIGIN` | `https://atssell.vercel.app` for this project (no trailing slash) |
 | `IP_HASH_SALT` | Fresh random secret |
 | `FILE_URL_SECRET` | Separate fresh random secret, at least 16 characters |
-| `STORAGE_DRIVER` | `s3` |
-| `S3_BUCKET` | Private resume/export bucket |
-| `S3_REGION` | Bucket region |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Credentials scoped to that bucket |
-| `SCANNER_DRIVER` | `clamav` |
-| `CLAMAV_HOST`, `CLAMAV_PORT` | Reachable trusted ClamAV service; default port 3310 |
-| `MAIL_DRIVER` | `smtp` |
-| `SMTP_URL` | Authenticated SMTP connection URL |
-| `MAIL_FROM` | Verified sender address |
+| `WEB_ORIGIN` | Optional on Vercel: defaults to the project's production domain (`https://atssell.vercel.app`). Set it when you use a custom domain |
 
-For S3-compatible providers also set `S3_ENDPOINT`. ClamAV is an external service;
-this configuration does not provision it. Keep its TCP endpoint private or protected.
-The API intentionally refuses development storage/scanner/mail settings in production.
+`NODE_ENV` is treated as `production` on Vercel. Requests from the deployment's own URLs (`VERCEL_URL`,
+`VERCEL_BRANCH_URL`) are accepted besides `WEB_ORIGIN`, so preview links can sign in too.
+
+### Optional services
+
+Each one is **off** until configured. While off, the rest of the app works and only the feature
+that needs it is refused with a clear message (HTTP 503):
+
+| Service | Off means | To turn on |
+| --- | --- | --- |
+| File storage | Resume uploads and CSV exports are refused | `STORAGE_DRIVER=s3`, `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (plus `S3_ENDPOINT` for S3-compatible stores such as Cloudflare R2) |
+| Malware scanning | Uploads are refused (nothing unscanned is ever stored) | `SCANNER_DRIVER=clamav`, `CLAMAV_HOST`, `CLAMAV_PORT` (default 3310) |
+| Email | Invitations, feedback-request and notification emails are not sent (feedback links are still shown to copy); password reset requests are accepted but send nothing | `MAIL_DRIVER=smtp`, `SMTP_URL`, `MAIL_FROM` |
+
+Uploads need both storage and scanning. ClamAV is an external service that this configuration does not
+provision; keep its TCP endpoint private or protected. The development drivers (`local`, `dev`,
+`console`) are still refused in production.
+
+### Troubleshooting
+
+| Response | Fix |
+| --- | --- |
+| `503 SERVER_MISCONFIGURED` | `details` names each missing or invalid setting. Set it in Vercel and redeploy |
+| `503 DATABASE_NOT_READY` "no tables yet" | Run the migrations (above) against this database |
+| `503 DATABASE_NOT_READY` "cannot sign in" / "cannot reach" | Check `DATABASE_URL` (role, password, host, `sslmode=require`) |
+| `403 BAD_ORIGIN` on sign-in | You opened the app on a domain other than `WEB_ORIGIN`; set `WEB_ORIGIN` to it |
+| `401` right after a successful sign-in | The session cookie is `Secure`: open the site over https |
 
 ## First company/admin
 

@@ -1,3 +1,5 @@
+import { AppError } from './errors.js';
+
 export interface InvitationEmail {
   to: string;
   companyName: string;
@@ -71,6 +73,32 @@ export class ConsoleMailer implements Mailer {
     console.log(`\n[dev-mail] To: ${to}\n[dev-mail] Subject: ${subject}\n[dev-mail] Link: ${link}\n`);
   }
 }
+
+/**
+ * MAIL_DRIVER=off: no email provider is configured. Sending fails with a clear message (the invitation
+ * or link already exists and can be resent later). A password reset is dropped silently instead, so the
+ * response does not reveal whether the account exists.
+ */
+export class OffMailer implements Mailer {
+  async sendInvitation(): Promise<void> {
+    throw emailNotConfigured();
+  }
+
+  async sendPasswordReset(e: PasswordResetEmail) {
+    console.warn(`[mail-off] password reset email not sent (MAIL_DRIVER=off) for ${e.companyName}`);
+  }
+
+  async sendFeedbackRequest(): Promise<void> {
+    throw emailNotConfigured();
+  }
+
+  async sendNotice(): Promise<void> {
+    throw emailNotConfigured();
+  }
+}
+
+const emailNotConfigured = () =>
+  new AppError(503, 'EMAIL_NOT_CONFIGURED', 'Email is not set up on this server yet, so nothing was sent. You can resend once it is configured.');
 
 /** Test mailer: keeps sent emails in memory. */
 export class MemoryMailer implements Mailer {

@@ -2,6 +2,7 @@ import net from 'node:net';
 import nodemailer from 'nodemailer';
 import { afterAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
+import { createMailer, createScanner, createStorage } from '../src/providers/index.js';
 import { ClamAvScanner } from '../src/providers/clamav.js';
 import { S3Storage } from '../src/providers/s3.js';
 import { SmtpMailer } from '../src/providers/smtp.js';
@@ -118,9 +119,33 @@ describe('SmtpMailer', () => {
 
 describe('production configuration', () => {
   it('refuses development providers in production', () => {
-    expect(() => loadConfig({ ...base, NODE_ENV: 'production' })).toThrow(/STORAGE_DRIVER=s3/);
-    expect(() => loadConfig({ ...base, NODE_ENV: 'production', STORAGE_DRIVER: 's3', S3_BUCKET: 'b' })).toThrow(/SCANNER_DRIVER=clamav/);
-    expect(() => loadConfig({ ...base, NODE_ENV: 'production', STORAGE_DRIVER: 's3', S3_BUCKET: 'b', SCANNER_DRIVER: 'clamav' })).toThrow(/MAIL_DRIVER=smtp/);
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', STORAGE_DRIVER: 'local' })).toThrow(/STORAGE_DRIVER=s3/);
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', SCANNER_DRIVER: 'dev' })).toThrow(/SCANNER_DRIVER=clamav/);
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', MAIL_DRIVER: 'console' })).toThrow(/MAIL_DRIVER=smtp/);
+  });
+
+  it('turns unconfigured services off in production, and off refuses the feature instead of failing to start', async () => {
+    const config = loadConfig({ ...base, NODE_ENV: 'production' });
+    expect([config.STORAGE_DRIVER, config.SCANNER_DRIVER, config.MAIL_DRIVER]).toEqual(['off', 'off', 'off']);
+    await expect(createStorage(config, '/').put('k', Buffer.from('x'), 'text/plain')).rejects.toMatchObject({ status: 503, code: 'FILES_NOT_CONFIGURED' });
+    await expect(createScanner(config).scan(Buffer.from('x'))).rejects.toMatchObject({ status: 503, code: 'FILES_NOT_CONFIGURED' });
+    const mailer = createMailer(config);
+    await expect(mailer.sendNotice({ to: 'a@b.test', subject: 's', text: 't' })).rejects.toMatchObject({ status: 503, code: 'EMAIL_NOT_CONFIGURED' });
+    // Silent, so a reset request does not reveal whether the account exists.
+    await expect(mailer.sendPasswordReset({ to: 'a@b.test', companyName: 'C', link: 'https://x', expiresAt: new Date() })).resolves.toBeUndefined();
+    expect(loadConfig(base).STORAGE_DRIVER).toBe('local');
+  });
+
+  it('on Vercel, defaults WEB_ORIGIN to the production domain and also allows the deployment URLs', () => {
+    const { WEB_ORIGIN: _, ...rest } = base;
+    const vercel = { ...rest, VERCEL: '1', VERCEL_PROJECT_PRODUCTION_URL: 'ats.vercel.app', VERCEL_URL: 'ats-abc123.vercel.app', VERCEL_BRANCH_URL: 'ats-git-main.vercel.app' };
+    const config = loadConfig(vercel);
+    expect(config.WEB_ORIGIN).toBe('https://ats.vercel.app');
+    expect(config.NODE_ENV).toBe('production');
+    expect(config.ALLOWED_ORIGINS).toEqual(['https://ats.vercel.app', 'https://ats-abc123.vercel.app', 'https://ats-git-main.vercel.app']);
+    expect(loadConfig({ ...vercel, WEB_ORIGIN: 'https://jobs.example.com/' }).WEB_ORIGIN).toBe('https://jobs.example.com');
+    expect(loadConfig(base).ALLOWED_ORIGINS).toEqual(['http://localhost:5180']);
+    expect(() => loadConfig(rest)).toThrow(/WEB_ORIGIN/);
   });
 
   it('accepts a complete production setup and requires the settings each driver needs', () => {

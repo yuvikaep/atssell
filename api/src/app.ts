@@ -123,7 +123,7 @@ export async function buildApp({ config, db, mailer, storage, scanner, logger = 
   app.addHook('onRequest', async (req) => {
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return;
     const origin = req.headers.origin;
-    if (origin !== undefined && origin !== config.WEB_ORIGIN) {
+    if (origin !== undefined && !config.ALLOWED_ORIGINS.includes(origin)) {
       throw new AppError(403, 'BAD_ORIGIN', 'Request origin not allowed.');
     }
   });

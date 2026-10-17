@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { AppError } from './errors.js';
 
 /** Private object storage. Local disk in development; S3 (private bucket) in production. */
 export interface ObjectStorage {
@@ -27,6 +28,20 @@ export class LocalDiskStorage implements ObjectStorage {
   }
 }
 
+/** STORAGE_DRIVER=off: no bucket is configured, so uploads and exports are refused with a clear message. */
+export class OffStorage implements ObjectStorage {
+  async put(): Promise<void> {
+    throw filesNotConfigured();
+  }
+
+  async get(): Promise<Buffer> {
+    throw filesNotConfigured();
+  }
+}
+
+export const filesNotConfigured = () =>
+  new AppError(503, 'FILES_NOT_CONFIGURED', 'File uploads are not set up on this server yet. Ask your administrator to configure storage and scanning.');
+
 export type ScanResult = 'clean' | 'infected' | 'failed';
 
 /** Malware scanning. ClamAV in a background worker before pilot. */
@@ -48,6 +63,13 @@ export class DevScanner implements FileScanner {
 
   async scan(data: Buffer): Promise<ScanResult> {
     return data.includes(EICAR) ? 'infected' : 'clean';
+  }
+}
+
+/** SCANNER_DRIVER=off: nothing can be scanned, so no file is accepted. */
+export class OffScanner implements FileScanner {
+  async scan(): Promise<ScanResult> {
+    throw filesNotConfigured();
   }
 }
 
