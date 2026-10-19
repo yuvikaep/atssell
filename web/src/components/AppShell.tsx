@@ -26,6 +26,7 @@ const HR_NAV: NavItem[] = [
   { to: '/employees', label: 'Employees', icon: 'check', visible: () => true },
   { to: '/leaderboards', label: 'Leaderboards', icon: 'trophy', visible: () => true },
   { to: '/reports', label: 'Reports', icon: 'chart', visible: () => true },
+  { to: '/departments', label: 'Departments', icon: 'org', visible: (me) => can(me, 'departments.manage') || can(me, 'vacancies.view_all') },
   { to: '/users', label: 'Team & roles', icon: 'shield', visible: () => true },
 ];
 const AGENCY_NAV: NavItem[] = [
