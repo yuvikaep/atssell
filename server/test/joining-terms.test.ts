@@ -76,3 +76,15 @@ describe('exits', () => {
     expect(exit.statusCode, exit.body).toBe(200);
   });
 });
+
+describe('editing a job', () => {
+  it('changes title, openings, salary range, JD and who settles salary; recruiters cannot', async () => {
+    const job = (await call(ctx, admin, 'POST', '/jobs', { title: 'Old title', department_id: s.eng.id, location: 'Pune', openings: 2 })).json().data;
+    const res = await call(ctx, admin, 'PATCH', `/jobs/${job.id}`, { title: 'Telesales Executive', openings: 10, salary_min: 240000, salary_max: 300000, description: 'Calls and closes leads.', terms_owner: 'interviewer' });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().data).toMatchObject({ title: 'Telesales Executive', headcount: 10, terms_owner: 'interviewer', description: 'Calls and closes leads.' });
+    expect(Number(res.json().data.max_ctc)).toBe(300000);
+    expect((await call(ctx, admin, 'PATCH', `/jobs/${job.id}`, { salary_min: 500000 })).statusCode).toBe(400);
+    expect((await call(ctx, recruiter, 'PATCH', `/jobs/${job.id}`, { title: 'Nope' })).statusCode).toBe(403);
+  });
+});

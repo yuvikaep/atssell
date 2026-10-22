@@ -5,6 +5,7 @@ import { api, ApiError, can, canAll, EMPLOYMENT_TYPES, formatCtcRange, formatDay
 import { useMe } from '../components/AppShell';
 import { InterviewRounds } from '../components/InterviewRounds';
 import { JobCandidates } from '../components/JobCandidates';
+import { EditJobDialog } from '../components/EditJobDialog';
 import { BackLink, Badge, DetailGrid, Dialog, ErrorState, Field, fieldError, FormError, Loading, Tags } from '../components/ui';
 import { agenciesQuery, usersQuery, vacancyQuery } from '../queries';
 import { useSessionState } from '../session-storage';
@@ -23,6 +24,7 @@ export function VacancyDetailPage() {
   const [tab, setTab] = useSessionState('jm.vacancy.tab', 'candidates', TABS);
   const [change, setChange] = useState<(typeof NEXT)[VacancyStatus][number] | null>(null);
   const [closing, setClosing] = useState(false);
+  const [editing, setEditing] = useState(false);
   const query = useQuery(vacancyQuery(id));
   const me = useMe();
 
@@ -47,6 +49,7 @@ export function VacancyDetailPage() {
         </div>
         {v.can.manage && (
           <div className="actions-row">
+            {(v.status === 'open' || v.status === 'on_hold') && <button className="btn" onClick={() => setEditing(true)}>Edit job</button>}
             {can(me, 'employment.manage') && (v.status === 'open' || v.status === 'on_hold') && <button className="btn btn-primary" onClick={() => setClosing(true)}>Close job</button>}
             {NEXT[v.status].filter((n) => !(n.to === 'closed' && can(me, 'employment.manage'))).map((n) => (
               <button key={n.to} className={`btn ${n.danger ? 'btn-danger' : ''}`} onClick={() => setChange(n)}>{n.label}</button>
@@ -54,6 +57,7 @@ export function VacancyDetailPage() {
           </div>
         )}
       </div>
+      {editing && <EditJobDialog v={v} onClose={() => setEditing(false)} />}
       {v.status_reason && (v.status === 'on_hold' || v.status === 'cancelled') && (
         <div className="alert alert-error" role="status">{VACANCY_STATUS_LABEL[v.status]}: {v.status_reason}</div>
       )}
@@ -98,7 +102,7 @@ function Overview({ v }: { v: VacancyDetail }) {
           ]} />
         </div>
         <div><h2 style={{ marginBottom: 8 }}>Skills</h2><Tags items={v.skills} /></div>
-        <div><h2 style={{ marginBottom: 8 }}>Description</h2><p className="prose">{v.description}</p></div>
+        <div><h2 style={{ marginBottom: 8 }}>Job description (JD)</h2><p className="prose">{v.description}</p></div>
         <Link to="/requisitions/$id" params={{ id: v.requisition_id }}>View the requisition →</Link>
       </div>
       <div className="stack">

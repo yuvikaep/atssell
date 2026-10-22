@@ -42,7 +42,7 @@ export function NewJobDialog({ onClose }: { onClose: () => void }) {
         </Field>
         <Field id="job-min" label="Salary from (₹ per year)"><input id="job-min" type="number" min={0} value={f.salary_min} onChange={set('salary_min')} /></Field>
         <Field id="job-max" label="Salary to (₹ per year)" error={fieldError(create.error, 'salary_max')}><input id="job-max" type="number" min={0} value={f.salary_max} onChange={set('salary_max')} /></Field>
-        <div className="span-2"><Field id="job-desc" label="Description (optional)"><textarea id="job-desc" rows={3} value={f.description} onChange={set('description')} /></Field></div>
+        <div className="span-2"><Field id="job-desc" label="Job description (JD)" hint="Optional now; you can edit it later from the job."><textarea id="job-desc" rows={5} value={f.description} onChange={set('description')} /></Field></div>
       </div>
       <p className="cell-sub">After creating the job, assign recruiters and agencies from its page.</p>
     </Dialog>
