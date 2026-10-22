@@ -1,3 +1,4 @@
+import { StatusCounts } from '../components/StatusCounts';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { EMPLOYMENT_TYPES, VACANCY_STATUS_LABEL, type OwnershipView } from '../api';
@@ -28,6 +29,7 @@ export function PortalPage() {
         <Link className="btn" to="/portal/submissions">All submissions</Link>
       </div>
 
+      <StatusCounts />
       <div className="stats">
         <div className="card stat"><div className="label">Open vacancies</div><div className="value">{h.open_vacancies}</div></div>
         <div className="card stat"><div className="label">Candidates credited to you</div><div className="value">{h.submissions.credited}</div><div className="foot">{h.in_pipeline} still in the pipeline</div></div>

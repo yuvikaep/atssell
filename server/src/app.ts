@@ -11,6 +11,7 @@ import type { Mailer } from './mailer.js';
 import type { Principal } from './permissions.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { candidateStatusRoutes } from './routes/candidate-status.js';
+import { statusSummaryRoutes } from './routes/status-summary.js';
 import { candidateMasterRoutes } from './routes/candidate-master.js';
 import { leaderboardRoutes } from './routes/leaderboards.js';
 import { employmentRoutes } from './routes/employment.js';
@@ -177,6 +178,7 @@ export async function buildApp({ config, db, mailer, storage, scanner, logger = 
         await authed.register(offerRoutes);
         await authed.register(hiringHomeRoutes);
         await authed.register(candidateStatusRoutes);
+        await authed.register(statusSummaryRoutes);
         await authed.register(jobRoutes);
         await authed.register(agencyTermsRoutes);
         await authed.register(employmentRoutes);

@@ -278,9 +278,8 @@ function AddToVacancyDialog({ c, onClose }: { c: CandidateProfile; onClose: () =
   const already = new Set(c.applications.filter((a) => a.status === 'active').map((a) => a.vacancy_id));
   const options = (vacancies.data?.data ?? []).filter((v) => !already.has(v.id));
   const [vacancyId, setVacancyId] = useState('');
-  const [source, setSource] = useState('internal_recruiter');
   const add = useMutation({
-    mutationFn: () => api('POST', '/applications', { candidate_id: c.id, vacancy_id: vacancyId, source_type: source }),
+    mutationFn: () => api('POST', '/applications', { candidate_id: c.id, vacancy_id: vacancyId }),
     onSuccess: async () => { await refresh(); onClose(); },
   });
   return (
@@ -300,11 +299,6 @@ function AddToVacancyDialog({ c, onClose }: { c: CandidateProfile; onClose: () =
             <select id="av-vacancy" value={vacancyId} onChange={(e) => setVacancyId(e.target.value)}>
               <option value="" disabled>{options.length ? 'Choose a vacancy' : 'No open vacancies available'}</option>
               {options.map((v) => <option key={v.id} value={v.id}>{v.vacancy_code} · {v.title} ({v.location})</option>)}
-            </select>
-          </Field>
-          <Field id="av-source" label="Source">
-            <select id="av-source" value={source} onChange={(e) => setSource(e.target.value)}>
-              {['internal_recruiter', 'referral', 'direct', 'job_board', 'other'].map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
             </select>
           </Field>
         </>

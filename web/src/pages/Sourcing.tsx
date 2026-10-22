@@ -76,7 +76,6 @@ function CandidateStep({ jobId, jobTitle, departmentId, department, onChangeJob,
   const queryClient = useQueryClient();
   const [form, setForm] = useState<CandidateForm>(emptyCandidateForm);
   const [file, setFile] = useState<File | null>(null);
-  const [source, setSource] = useState('internal_recruiter');
   const [jobRoleId, setJobRoleId] = useState('');
   const roles = useQuery(jobRolesQuery(departmentId));
   const [finding, setFinding] = useState(false);
@@ -93,7 +92,7 @@ function CandidateStep({ jobId, jobTitle, departmentId, department, onChangeJob,
     retry: false,
   });
 
-  const apply = (candidateId: string) => api<{ data: { id: string } }>('POST', '/applications', { candidate_id: candidateId, vacancy_id: jobId, source_type: source, job_role_id: jobRoleId || null });
+  const apply = (candidateId: string) => api<{ data: { id: string } }>('POST', '/applications', { candidate_id: candidateId, vacancy_id: jobId, job_role_id: jobRoleId || null });
   const save = useMutation({
     mutationFn: async () => {
       const c = await api<{ data: { id: string } }>('POST', '/candidates', candidateBody(form, false));
@@ -136,11 +135,6 @@ function CandidateStep({ jobId, jobTitle, departmentId, department, onChangeJob,
           <select id="src-role" value={jobRoleId} onChange={(e) => setJobRoleId(e.target.value)} disabled={!roles.data?.length}>
             <option value="">{roles.data?.length ? 'Choose the role' : 'No roles yet'}</option>
             {roles.data?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
-        </Field>
-        <Field id="src-source" label="Where did you find them?">
-          <select id="src-source" value={source} onChange={(e) => setSource(e.target.value)}>
-            {['internal_recruiter', 'referral', 'direct', 'job_board', 'other'].map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
           </select>
         </Field>
         <Field id="src-resume" label="Resume" hint={`PDF, DOC or DOCX, up to ${maxMb} MB.`} error={file && file.size > maxBytes ? `This file is larger than ${maxMb} MB.` : undefined}>

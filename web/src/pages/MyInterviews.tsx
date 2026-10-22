@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
+import { StatusCounts } from '../components/StatusCounts';
 import { api, ApiError, type MyInterviewDetail, formatInZone, INTERVIEW_STATUS_LABEL, MODE_LABEL, RECOMMENDATION_LABEL, type MyInterviewRow } from '../api';
 import { FeedbackForm, type FeedbackValues } from '../components/FeedbackForm';
 import { RemarkBanner } from '../components/RemarkBanner';
@@ -59,6 +60,7 @@ export function MyInterviewsPage() {
           <p>Interviews you are on the panel for, and the feedback you owe.</p>
         </div>
       </div>
+      <StatusCounts />
       {rows.length === 0 ? <div className="card"><EmptyState title="No interviews yet">When you are added to an interview panel it appears here.</EmptyState></div> : (
         <>
           <Section title="Feedback to give" rows={owing} empty="Nothing waiting on you." />

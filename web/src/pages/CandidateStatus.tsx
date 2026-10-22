@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useState } from 'react';
 import { Link, useSearch } from '@tanstack/react-router';
+import { StatusCounts } from '../components/StatusCounts';
 import { api, upload, formatInZone, RECOMMENDATION_LABEL, type CandidateStatusRow, type Recommendation } from '../api';
 import { ScheduleDialog } from '../components/ScheduleDialog';
 import { SetTimeDialog } from '../components/SetTimeDialog';
@@ -26,6 +27,7 @@ export function CandidateStatusPage() {
   return (
     <>
       <div className="page-header"><div><h1>Candidate status</h1><p>Where each candidate stands, and what the interviewers said.</p></div></div>
+      <StatusCounts />
       <div className="card">
         <div className="toolbar">
           <input className="grow" type="search" placeholder="Search by name, sourcing ID or temp ID" aria-label="Search candidates" value={text} onChange={(e) => setText(e.target.value)} />
