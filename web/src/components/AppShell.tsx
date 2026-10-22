@@ -136,7 +136,7 @@ export function AppShell() {
     <div className="shell" data-drawer={drawer}>
       <a className="skip-link" href="#main">Skip to content</a>
       <nav className="sidebar" aria-label="Main">
-        <div className="brand"><span className="brand-mark">J</span><span>JobsMato</span>
+        <div className="brand"><span className="brand-mark">R</span><span>RMS</span>
           <button className="icon-btn drawer-close" aria-label="Close menu" onClick={() => setDrawer(false)}><Icon name="close" /></button>
         </div>
         {menuFor(me).map((group, i) => {
