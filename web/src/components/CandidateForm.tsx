@@ -1,3 +1,4 @@
+import { LocationPicker } from './LocationPicker';
 import type { Dispatch, SetStateAction } from 'react';
 import type { CandidateProfile } from '../api';
 import { Field, fieldError } from './ui';
@@ -57,8 +58,8 @@ export function CandidateFormFields({ form, setForm, error, canSeeCtc, canEditCo
           <Field id="c-phone" label="Phone" hint="Indian numbers need no country code." error={err('phone')}><input id="c-phone" type="tel" value={form.phone} onChange={set('phone')} autoComplete="off" /></Field>
         </>
       )}
-      <Field id="c-title" label="Current title"><input id="c-title" value={form.current_title} onChange={set('current_title')} /></Field>
-      <Field id="c-city" label="City"><input id="c-city" value={form.city} onChange={set('city')} /></Field>
+      <div className="span-2"><Field id="c-title" label="Current title"><input id="c-title" value={form.current_title} onChange={set('current_title')} /></Field></div>
+      <LocationPicker city={form.city} onCity={(city) => setForm((f) => ({ ...f, city }))} />
       <Field id="c-exp" label="Experience (years)" error={err('total_experience_years')}><input id="c-exp" type="number" min={0} step="0.5" value={form.total_experience_years} onChange={set('total_experience_years')} /></Field>
       <Field id="c-notice" label="Notice period (days)" error={err('notice_period_days')}><input id="c-notice" type="number" min={0} value={form.notice_period_days} onChange={set('notice_period_days')} /></Field>
       {canSeeCtc && (

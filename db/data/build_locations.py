@@ -43,3 +43,6 @@ out.sort(key=lambda x: (x[0], x[1], x[2] or '', x[3], x[5]))
 with gzip.open('db/data/india-post-offices.json.gz', 'wt', encoding='utf-8', compresslevel=9) as f:
     json.dump(out, f, separators=(',', ':'), ensure_ascii=False)
 print(len(out), 'offices;', len({x[0] for x in out}), 'states and UTs;', len({(x[0], x[1]) for x in out}), 'districts;', len({(x[0], x[1], x[2]) for x in out if x[2]}), 'tehsils')
+
+# The web form's State → City lists (web/src/data/india-locations.json) are the districts per state:
+#   python3 -c "import gzip,json; r=json.load(gzip.open('db/data/india-post-offices.json.gz')); m={}; [m.setdefault(s,set()).add(d.strip()) for s,d,*_ in r]; json.dump({k:sorted(v) for k,v in sorted(m.items())}, open('web/src/data/india-locations.json','w'), separators=(',',':'))"

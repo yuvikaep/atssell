@@ -85,7 +85,7 @@ const requisitionRoute = createRoute({ getParentRoute: () => appRoute, path: '/r
 const vacanciesRoute = createRoute({ getParentRoute: () => appRoute, path: '/vacancies', component: VacanciesPage });
 const vacancyRoute = createRoute({ getParentRoute: () => appRoute, path: '/vacancies/$id', component: VacancyDetailPage });
 const candidatesRoute = createRoute({ getParentRoute: () => appRoute, path: '/candidates', component: CandidateMasterPage });
-const candidateRoute = createRoute({ getParentRoute: () => appRoute, path: '/candidates/$id', component: CandidateDetailPage });
+const candidateRoute = createRoute({ getParentRoute: () => appRoute, path: '/candidates/$id', component: CandidateDetailPage, validateSearch: (s: Record<string, unknown>): { edit?: string } => ({ edit: typeof s.edit === 'string' ? s.edit : undefined }) });
 const pipelineRoute = createRoute({ getParentRoute: () => appRoute, path: '/pipeline', component: PipelinePage });
 const agenciesRoute = createRoute({ getParentRoute: () => appRoute, path: '/agencies', component: AgenciesPage });
 const interviewsRoute = createRoute({ getParentRoute: () => appRoute, path: '/interviews', component: InterviewsPage });

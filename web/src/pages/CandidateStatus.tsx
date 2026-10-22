@@ -1,13 +1,13 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useState } from 'react';
-import { useSearch } from '@tanstack/react-router';
-import { formatInZone, RECOMMENDATION_LABEL, type CandidateStatusRow, type Recommendation } from '../api';
+import { Link, useSearch } from '@tanstack/react-router';
+import { api, formatInZone, RECOMMENDATION_LABEL, type CandidateStatusRow, type Recommendation } from '../api';
 import { ScheduleDialog } from '../components/ScheduleDialog';
 import { SetTimeDialog } from '../components/SetTimeDialog';
-import { Badge, EmptyState, ErrorState, Loading } from '../components/ui';
+import { Badge, Dialog, EmptyState, ErrorState, Field, FormError, Loading } from '../components/ui';
 import { candidateStatusQuery, hiringHomeQuery } from '../queries';
 
-/** One list, one status per candidate, and what the interviewers said. The only action is booking the interview. */
+/** One list, one status per candidate, and what the interviewers said. Each row can be opened, edited, sourced for another job, or booked. */
 export function CandidateStatusPage() {
   const search = useSearch({ strict: false }) as { job?: string };
   const [job, setJob] = useState(search.job ?? '');
@@ -17,6 +17,7 @@ export function CandidateStatusPage() {
   const list = useQuery(candidateStatusQuery(job, q));
   const queryClient = useQueryClient();
   const [booking, setBooking] = useState<CandidateStatusRow | null>(null);
+  const [another, setAnother] = useState<CandidateStatusRow | null>(null);
   const refresh = () => Promise.all(['candidate-status', 'interviews', 'tasks', 'hiring-home'].map((k) => queryClient.invalidateQueries({ queryKey: [k] })));
 
   return (
@@ -46,12 +47,16 @@ export function CandidateStatusPage() {
                 <td><Feedback r={r} /></td>
                 <td className="actions">
                   {r.action && <button className="btn btn-sm btn-primary" onClick={() => setBooking(r)}>{r.action.kind === 'set_time' ? 'Set interview time' : 'Schedule interview'}</button>}
+                  <Link className="btn btn-sm" to="/candidates/$id" params={{ id: r.candidate_id }} search={{}}>View</Link>
+                  <Link className="btn btn-sm" to="/candidates/$id" params={{ id: r.candidate_id }} search={{ edit: '1' }}>Edit</Link>
+                  <button className="btn btn-sm" onClick={() => setAnother(r)}>Another job</button>
                 </td>
               </tr>
             ))}</tbody>
           </table></div>
         )}
       </div>
+      {another && <AnotherJobDialog row={another} jobs={(jobs.data?.vacancies ?? []).filter((v) => v.id !== another.vacancy_id)} onClose={() => { setAnother(null); refresh(); }} />}
       {booking?.action?.kind === 'schedule' && <ScheduleDialog applicationId={booking.application_id} vacancyId={booking.vacancy_id} onClose={() => { setBooking(null); refresh(); }} />}
       {booking?.action?.kind === 'set_time' && <SetTimeDialog interviewId={booking.action.interview_id} onClose={() => { setBooking(null); refresh(); }} />}
     </>
@@ -71,5 +76,38 @@ function Feedback({ r }: { r: CandidateStatusRow }) {
       )}
       {r.remark && <div className="decision-remark">“{r.remark}”</div>}
     </div>
+  );
+}
+
+/** Source the same person for one more of the recruiter's jobs; the profile is reused, not copied. */
+function AnotherJobDialog({ row, jobs, onClose }: { row: CandidateStatusRow; jobs: { id: string; title: string }[]; onClose: () => void }) {
+  const [jobId, setJobId] = useState('');
+  const add = useMutation({
+    mutationFn: () => api('POST', '/applications', { candidate_id: row.candidate_id, vacancy_id: jobId, source_type: 'internal_recruiter' }),
+  });
+  return (
+    <Dialog open title={`Source ${row.candidate_name} for another job`} onClose={onClose}
+      footer={add.isSuccess
+        ? <button className="btn btn-primary" type="button" onClick={onClose}>Done</button>
+        : <>
+            <button className="btn" type="button" onClick={onClose}>Cancel</button>
+            <button className="btn btn-primary" type="button" disabled={!jobId || add.isPending} onClick={() => add.mutate()}>{add.isPending ? 'Adding…' : 'Add to this job'}</button>
+          </>}>
+      {add.isSuccess ? (
+        <div className="alert alert-success" role="status">{row.candidate_name} was added to {jobs.find((j) => j.id === jobId)?.title}.</div>
+      ) : jobs.length === 0 ? (
+        <p className="muted">You have no other jobs to source for.</p>
+      ) : (
+        <>
+          <FormError error={add.error} />
+          <Field id="another-job" label="Job">
+            <select id="another-job" value={jobId} onChange={(e) => setJobId(e.target.value)}>
+              <option value="">Choose a job</option>
+              {jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
+            </select>
+          </Field>
+        </>
+      )}
+    </Dialog>
   );
 }

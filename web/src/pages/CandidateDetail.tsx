@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useDeferredValue, useRef, useState, type FormEvent } from 'react';
 import {
   api, ApiError, can, formatBytes, formatInr, formatInZone, INTERVIEW_STATUS_LABEL, SOURCE_LABEL, upload, type CandidateProfile, type CandidateRow, type Paged,
@@ -26,7 +26,9 @@ export function CandidateDetailPage() {
   const query = useQuery(candidateQuery(id));
   const me = useMe();
   const navigate = useNavigate();
-  const [dialog, setDialog] = useState<'edit' | 'vacancy' | 'merge' | null>(null);
+  // ?edit=1 (from Candidate status) opens the edit form straight away.
+  const { edit } = useSearch({ strict: false }) as { edit?: string };
+  const [dialog, setDialog] = useState<'edit' | 'vacancy' | 'merge' | null>(edit ? 'edit' : null);
   const [scheduling, setScheduling] = useState<{ applicationId: string; vacancyId: string } | null>(null);
   const seesInterviews = can(me, 'interviews.manage') || can(me, 'feedback.view') || can(me, 'decisions.record');
   const interviews = useQuery({ ...interviewsQuery({ candidate_id: id }), enabled: seesInterviews });
