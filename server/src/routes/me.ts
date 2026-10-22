@@ -14,7 +14,10 @@ const ChangePasswordBody = z.object({ current_password: z.string().min(1, 'Enter
 export async function meRoutes(app: FastifyInstance) {
   app.get('/me', async (req) => {
     const p = principal(req);
-    const settings = await withTenant(app.db, p.tenantId, (tx) => tx.selectFrom('tenant_settings').select('resume_max_bytes').executeTakeFirst());
+    const [settings, heads] = await withTenant(app.db, p.tenantId, (tx) => Promise.all([
+      tx.selectFrom('tenant_settings').select('resume_max_bytes').executeTakeFirst(),
+      tx.selectFrom('departments').select('id').where('head_user_id', '=', p.userId).where('status', '=', 'active').execute(),
+    ]));
     return {
       data: {
         limits: { resume_max_bytes: resumeLimit(settings?.resume_max_bytes) },
@@ -22,6 +25,8 @@ export async function meRoutes(app: FastifyInstance) {
         tenant: { id: p.tenantId, name: p.tenantName, slug: p.tenantSlug },
         roles: p.roles.map((r) => ({ code: r.code, name: r.name, department_id: r.departmentId })),
         permissions: p.permissions,
+        // Department heads see their department's employees and can mark exits.
+        head_of_departments: heads.map((d) => d.id),
       },
     };
   });

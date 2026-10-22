@@ -1,8 +1,9 @@
+import { useMe } from '../components/AppShell';
 import { ExportButton } from '../components/ExportButton';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api, formatDay, formatInr } from '../api';
+import { api, can, formatDay, formatInr } from '../api';
 import { Badge, Dialog, EmptyState, ErrorState, Field, fieldError, FormError, Loading, type Tone, IdTags } from '../components/ui';
 import { MODEL_LABEL } from './HrDashboard';
 import { JoinDialog } from '../components/JoinDialog';
@@ -25,6 +26,8 @@ const REP_TONE: Record<string, Tone> = { due: 'warning', replaced: 'success', ex
 
 /** After the offer: who joined, who is still here, who left, and the replacements agencies owe. */
 export function EmployeesPage() {
+  // The admin sees everything; a department head sees their department's people and marks exits.
+  const hr = can(useMe(), 'employment.manage');
   const [tab, setTab] = useState<'people' | 'replacements'>('people');
   const [status, setStatus] = useState<'all' | 'yet_to_join' | 'active' | 'exited'>('all');
   const [joining, setJoining] = useState<YetToJoin | null>(null);
@@ -33,8 +36,8 @@ export function EmployeesPage() {
   const [exiting, setExiting] = useState<Emp | null>(null);
   const q = search ? `&q=${encodeURIComponent(search)}` : '';
   const people = useQuery({ queryKey: ['employment', status, search], enabled: status !== 'yet_to_join', queryFn: () => api<{ data: Emp[] }>('GET', `/employment?status=${status}${q}`).then((r) => r.data) });
-  const yet = useQuery({ queryKey: ['employment', 'yet-to-join', search], enabled: status === 'all' || status === 'yet_to_join', queryFn: () => api<{ data: YetToJoin[] }>('GET', `/employment/yet-to-join?${q.slice(1)}`).then((r) => r.data) });
-  const reps = useQuery({ queryKey: ['replacements'], queryFn: () => api<{ data: Rep[] }>('GET', '/replacements').then((r) => r.data) });
+  const yet = useQuery({ queryKey: ['employment', 'yet-to-join', search], enabled: hr && (status === 'all' || status === 'yet_to_join'), queryFn: () => api<{ data: YetToJoin[] }>('GET', `/employment/yet-to-join?${q.slice(1)}`).then((r) => r.data) });
+  const reps = useQuery({ enabled: hr, queryKey: ['replacements'], queryFn: () => api<{ data: Rep[] }>('GET', '/replacements').then((r) => r.data) });
   const invoice = useMutation({
     mutationFn: (v: { id: string; invoice_status: string }) => api('PATCH', `/employment/${v.id}/invoice`, { invoice_status: v.invoice_status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['employment'] }),
@@ -43,38 +46,38 @@ export function EmployeesPage() {
   return (
     <>
       <div className="page-header"><div><h1>Employees</h1><p>Joining, employment status, exits, and replacements agencies owe. Selected candidates wait under Yet to join until you mark them joined.</p></div>
-        <ExportButton name="employees" head={['Sourcing ID', 'Temp ID', 'Name', 'Job', 'Source', 'Status', 'Joined on', 'Designation', 'CTC', 'Exit date', 'Exit reason']}
+        {hr && <ExportButton name="employees" head={['Sourcing ID', 'Temp ID', 'Name', 'Job', 'Source', 'Status', 'Joined on', 'Designation', 'CTC', 'Exit date', 'Exit reason']}
           rows={() => [
             ...(yet.data ?? []).map((r) => [r.sourcing_code, r.temp_employee_code, r.candidate_name, r.job_title, r.agency_name ?? r.recruiter_name, 'Yet to join', '', '', '', '', '']),
             ...(status === 'yet_to_join' ? [] : people.data ?? []).map((e) => [e.sourcing_code, e.temp_employee_code, e.candidate_name, e.job_title, e.agency_name ?? e.recruiter_name, e.status === 'active' ? 'Active' : 'Exited', e.joined_on, e.designation, e.annual_ctc, e.exit_date, e.exit_reason]),
-          ]} />
+          ]} />}
       </div>
       <div className="card">
         <div className="toolbar" role="tablist" aria-label="View">
           <button role="tab" aria-selected={tab === 'people'} className={`btn btn-sm ${tab === 'people' ? 'btn-primary' : ''}`} onClick={() => setTab('people')}>People</button>
-          <button role="tab" aria-selected={tab === 'replacements'} className={`btn btn-sm ${tab === 'replacements' ? 'btn-primary' : ''}`} onClick={() => setTab('replacements')}>Replacements{due > 0 ? ` (${due} due)` : ''}</button>
+          {hr && <button role="tab" aria-selected={tab === 'replacements'} className={`btn btn-sm ${tab === 'replacements' ? 'btn-primary' : ''}`} onClick={() => setTab('replacements')}>Replacements{due > 0 ? ` (${due} due)` : ''}</button>}
           {tab === 'people' && (<><span style={{ flex: 1 }} /><input type="search" placeholder="Name, sourcing or temp ID" aria-label="Search" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 220 }} />
-            <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="all">All</option><option value="yet_to_join">Yet to join</option><option value="active">Active</option><option value="exited">Exited</option></select></>)}
+            <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="all">All</option>{hr && <option value="yet_to_join">Yet to join</option>}<option value="active">Active</option><option value="exited">Exited</option></select></>)}
         </div>
         {tab === 'people' && (status === 'all' || status === 'yet_to_join') && <YetToJoinTable q={yet} onJoin={setJoining} />}
         {tab === 'people' && status === 'yet_to_join' ? null : tab === 'people' ? (people.isPending ? <Loading /> : people.isError ? <ErrorState error={people.error} onRetry={() => people.refetch()} /> : people.data.length === 0 ? (
           <EmptyState title="Nobody has joined yet">Selected candidates appear under Yet to join; choose Mark joined when they start.</EmptyState>
         ) : (
           <div className="table-wrap"><table className="board-table">
-            <thead><tr><th>Employee</th><th>Job</th><th>Source</th><th>Joined</th><th className="num">CTC</th><th>Status</th><th>Terms and fee</th><th>Invoice</th><th /></tr></thead>
+            <thead><tr><th>Employee</th><th>Job</th><th>Source</th><th>Joined</th>{hr && <th className="num">CTC</th>}<th>Status</th>{hr && <><th>Terms and fee</th><th>Invoice</th></>}<th /></tr></thead>
             <tbody>{people.data.map((e) => (
               <tr key={e.id}>
                 <td><strong>{e.candidate_name}</strong><div className="cell-sub">{e.designation}</div><IdTags sourcing={e.sourcing_code} temp={e.temp_employee_code} /></td>
                 <td><Link className="row-link" to="/vacancies/$id" params={{ id: e.vacancy_id }}>{e.job_title}</Link></td>
                 <td>{e.agency_name ?? e.recruiter_name ?? '—'}</td>
-                <td>{formatDay(e.joined_on)}</td><td className="num">{formatInr(e.annual_ctc)}</td>
+                <td>{formatDay(e.joined_on)}</td>{hr && <td className="num">{formatInr(e.annual_ctc)}</td>}
                 <td>{e.status === 'active' ? <Badge tone="success">Active</Badge> : <Badge tone="danger">Exited</Badge>}{e.exit_date && <div className="cell-sub">{formatDay(e.exit_date)} · {e.exit_reason}</div>}
                   {e.replacement_status && <div><Badge tone={REP_TONE[e.replacement_status]!}>Replacement {e.replacement_status}</Badge></div>}</td>
-                <td>{e.payment_model ? <>{MODEL_LABEL[e.payment_model]}<div className="cell-sub">v{e.terms_version} · {e.fee_type === 'percent_of_ctc' ? `${e.fee_value}%` : 'fixed'}{e.fee_amount !== null ? ` · ${formatInr(e.fee_amount)}` : ''}</div></> : <span className="muted">{e.source_agency_id ? 'No terms at joining' : '—'}</span>}</td>
+                {hr && <><td>{e.payment_model ? <>{MODEL_LABEL[e.payment_model]}<div className="cell-sub">v{e.terms_version} · {e.fee_type === 'percent_of_ctc' ? `${e.fee_value}%` : 'fixed'}{e.fee_amount !== null ? ` · ${formatInr(e.fee_amount)}` : ''}</div></> : <span className="muted">{e.source_agency_id ? 'No terms at joining' : '—'}</span>}</td>
                 <td>{e.source_agency_id ? (
                   <select aria-label={`Invoice for ${e.candidate_name}`} value={e.invoice_status} disabled={invoice.isPending} onChange={(ev) => invoice.mutate({ id: e.id, invoice_status: ev.target.value })} style={{ width: 'auto' }}>
                     {Object.entries(INVOICE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>) : <span className="muted">—</span>}</td>
+                  </select>) : <span className="muted">—</span>}</td></>}
                 <td className="actions">{e.status === 'active' && <button className="btn btn-sm btn-danger" onClick={() => setExiting(e)}>Mark exited</button>}</td>
               </tr>
             ))}</tbody>

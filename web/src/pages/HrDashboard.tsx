@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { api, formatDay } from '../api';
 import { Bars } from '../components/Bars';
 import { Icon } from '../components/Icon';
+import { PipelineChart } from '../components/PipelineChart';
 import { Meter, Stat, pctText } from '../components/Stat';
 import { Badge, EmptyState, ErrorState, Loading } from '../components/ui';
 
@@ -49,6 +50,14 @@ function Body({ d }: { d: Dash }) {
         <Stat label="Joined" value={t.joined} />
         <Stat label="Active employees" value={t.active_employees} />
         <Stat label="Exits" value={t.exits} tone={t.exits > 0 ? 'bad' : undefined} />
+      </div>
+
+      <div className="report-grid">
+        <PipelineChart />
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="toolbar"><h2>Joined by job</h2><span style={{ flex: 1 }} /><span className="muted">joined of target</span></div>
+          <Bars title="Joined by job" rows={d.jobs.slice(0, 8).map((j) => ({ label: j.title, value: j.joined, note: `of ${j.target} · ${j.pipeline} in pipeline` }))} />
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>

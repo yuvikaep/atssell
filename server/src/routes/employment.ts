@@ -34,6 +34,13 @@ function need(p: Principal) {
   if (!can(p, 'employment.manage')) throw forbidden();
 }
 
+async function headDepartmentIds(tx: Tx, userId: string) {
+  return (await tx.selectFrom('departments').select('id').where('head_user_id', '=', userId).where('status', '=', 'active').execute()).map((d) => d.id);
+}
+async function departmentOfVacancy(tx: Tx, vacancyId: string) {
+  return (await tx.selectFrom('vacancies as v').innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id').select('rq.department_id').where('v.id', '=', vacancyId).executeTakeFirstOrThrow()).department_id;
+}
+
 function employmentBase(tx: Tx) {
   return tx
     .selectFrom('employment_records as e')
@@ -128,10 +135,13 @@ export async function employmentRoutes(app: FastifyInstance) {
 
   app.get('/employment', async (req) => {
     const p = principal(req);
-    need(p);
     const f = ListQuery.parse(req.query);
     return withTenant(db, p.tenantId, async (tx) => {
-      let q = employmentBase(tx);
+      // A department head sees only their departments' people, without commercials.
+      const admin = can(p, 'employment.manage');
+      const heads = admin ? [] : await headDepartmentIds(tx, p.userId);
+      if (!admin && heads.length === 0) throw forbidden();
+      let q = employmentBase(tx).$if(!admin, (x) => x.innerJoin('requisitions as hrq', 'hrq.id', 'v.requisition_id').where('hrq.department_id', 'in', heads));
       if (f.status !== 'all') q = q.where('e.status', '=', f.status);
       if (f.agency_id) q = q.where('e.source_agency_id', '=', f.agency_id);
       if (f.vacancy_id) q = q.where('e.vacancy_id', '=', f.vacancy_id);
@@ -141,7 +151,8 @@ export async function employmentRoutes(app: FastifyInstance) {
       }
       const { total } = await q.select(sql<number>`count(*)::int`.as('total')).executeTakeFirstOrThrow();
       const rows = await q.select([...COLS]).orderBy('e.joined_on', 'desc').limit(f.page_size).offset((f.page - 1) * f.page_size).execute();
-      return { data: rows.map(present), page: f.page, page_size: f.page_size, total };
+      const out = rows.map(present).map((r) => (admin ? r : { ...r, annual_ctc: null, fee_amount: null, fee_value: null, fee_type: null, payment_model: null, terms_version: null, invoice_status: null, invoice_reference: null }));
+      return { data: out, page: f.page, page_size: f.page_size, total, can_manage: admin };
     });
   });
 
@@ -173,14 +184,15 @@ export async function employmentRoutes(app: FastifyInstance) {
     });
   });
 
+  // The admin, or the head of the employee's department, marks an exit.
   app.post('/employment/:id/exit', async (req) => {
     const p = principal(req);
-    need(p);
     const { id } = idParams.parse(req.params);
     const body = ExitBody.parse(req.body);
     return withTenant(db, p.tenantId, async (tx) => {
       const e = await tx.selectFrom('employment_records').selectAll().where('id', '=', id).forUpdate().executeTakeFirst();
       if (!e) throw notFound('Employment record');
+      if (!can(p, 'employment.manage') && !(await headDepartmentIds(tx, p.userId)).includes(await departmentOfVacancy(tx, e.vacancy_id))) throw forbidden();
       if (e.status === 'exited') throw new AppError(409, 'ALREADY_EXITED', 'This person is already marked as exited.');
       if (body.exit_date < e.joined_on) throw new AppError(400, 'VALIDATION_ERROR', 'Some fields are invalid.', [{ path: 'exit_date', message: 'The exit date cannot be before the joining date.' }]);
       await tx.updateTable('employment_records').set({ status: 'exited', exit_date: body.exit_date, exit_reason: body.exit_reason, marked_exited_by: p.userId, updated_at: sql`now()` }).where('id', '=', id).execute();

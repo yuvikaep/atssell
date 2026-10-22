@@ -40,6 +40,7 @@ const AGENCY_NAV: NavItem[] = [
 const INTERVIEWER_NAV: NavItem[] = [
   { to: '/my-interviews', label: 'My interviews', icon: 'chat', visible: () => true },
   { to: '/salary-joining', label: 'Salary & joining', icon: 'offer', visible: () => true },
+  { to: '/employees', label: 'My department staff', icon: 'check', visible: (me) => !!me.head_of_departments?.length },
 ];
 
 const RECRUITER_NAV: NavItem[] = [
@@ -48,6 +49,7 @@ const RECRUITER_NAV: NavItem[] = [
   { to: '/sourcing', label: 'Sourcing', icon: 'plus', visible: () => true },
   { to: '/status', label: 'Candidate status', icon: 'check', visible: () => true },
   { to: '/salary-joining', label: 'Salary & joining', icon: 'offer', visible: () => true },
+  { to: '/employees', label: 'My department staff', icon: 'check', visible: (me) => !!me.head_of_departments?.length },
 ];
 
 const NAV: { section?: string; items: NavItem[] }[] = [

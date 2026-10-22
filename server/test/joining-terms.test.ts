@@ -58,3 +58,21 @@ describe('salary and joining', () => {
     expect((await call(ctx, admin, 'POST', `/applications/${a.applicationId}/joining-terms`, terms)).json().data.status).toBe('approved');
   });
 });
+
+describe('exits', () => {
+  it('the admin or the head of the department marks an exit; the head sees no pay', async () => {
+    const { applicationId } = await selectedCandidate('admin', 'ex');
+    const join = await call(ctx, admin, 'POST', `/applications/${applicationId}/join`, { joined_on: '2026-01-05', designation: 'Engineer', annual_ctc: 700000 });
+    expect(join.statusCode, join.body).toBe(201);
+    const emp = (await call(ctx, admin, 'GET', '/employment')).json().data.find((e: { application_id: string }) => e.application_id === applicationId);
+    expect((await call(ctx, recruiter, 'POST', `/employment/${emp.id}/exit`, { exit_date: '2026-02-01', exit_reason: 'Left' })).statusCode).toBe(403);
+
+    await ctx.adminDb.updateTable('departments').set({ head_user_id: s.users.hr2.id }).where('id', '=', s.eng.id).execute();
+    const head = await s.as('hr2');
+    expect((await call(ctx, head, 'GET', '/me')).json().data.head_of_departments).toEqual([s.eng.id]);
+    const mine = (await call(ctx, head, 'GET', '/employment')).json().data.find((e: { id: string }) => e.id === emp.id);
+    expect(mine.annual_ctc).toBeNull();
+    const exit = await call(ctx, head, 'POST', `/employment/${emp.id}/exit`, { exit_date: '2026-02-01', exit_reason: 'Left for studies' });
+    expect(exit.statusCode, exit.body).toBe(200);
+  });
+});
