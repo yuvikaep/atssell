@@ -2,17 +2,17 @@
 FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY server/package.json api/
+COPY server/package.json server/
 COPY web/package.json web/
 RUN npm ci
-COPY api api
+COPY server server
 RUN npm run -w server build
 
 FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
-COPY server/package.json api/
+COPY server/package.json server/
 COPY web/package.json web/
 RUN npm ci --omit=dev -w server && npm cache clean --force
 COPY --from=build /app/server/dist server/dist
