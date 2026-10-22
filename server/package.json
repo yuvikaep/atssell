@@ -15,7 +15,8 @@
     "load-test": "tsx --env-file=../.env scripts/load-test.ts",
     "pilot:baseline": "tsx --env-file=../.env scripts/pilot-baseline.ts",
     "retention:report": "tsx --env-file=../.env scripts/retention-report.ts",
-    "seed:demo": "tsx --env-file=../.env scripts/seed-demo-data.ts"
+    "seed:demo": "tsx --env-file=../.env scripts/seed-demo-data.ts",
+    "mail:test": "tsx --env-file=../.env scripts/send-test-email.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",

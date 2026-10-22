@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { S3Client } from '@aws-sdk/client-s3';
 import nodemailer from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js';
 import type { Config } from '../config.js';
 import { ConsoleMailer, OffMailer, type Mailer } from '../mailer.js';
 import { DevScanner, LocalDiskStorage, NoScanScanner, OffScanner, OffStorage, type FileScanner, type ObjectStorage } from '../storage.js';
@@ -29,8 +30,22 @@ export function createScanner(config: Config): FileScanner {
   return new DevScanner(config.NODE_ENV);
 }
 
+/** Connection settings for the SMTP server: SMTP_URL as given, or built from SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD. */
+export function smtpTransportOptions(config: Config): string | SMTPTransport.Options {
+  if (config.SMTP_URL) return config.SMTP_URL;
+  const implicitTls = config.SMTP_PORT === 465;
+  return {
+    host: config.SMTP_HOST,
+    port: config.SMTP_PORT,
+    secure: implicitTls,
+    // On any other port, refuse to send credentials unless the server upgrades to TLS.
+    requireTLS: !implicitTls,
+    auth: { user: config.SMTP_USER!, pass: config.SMTP_PASSWORD! },
+  };
+}
+
 export function createMailer(config: Config): Mailer {
-  if (config.MAIL_DRIVER === 'smtp') return new SmtpMailer(nodemailer.createTransport(config.SMTP_URL!), config.MAIL_FROM!);
+  if (config.MAIL_DRIVER === 'smtp') return new SmtpMailer(nodemailer.createTransport(smtpTransportOptions(config)), config.MAIL_FROM!);
   if (config.MAIL_DRIVER === 'off') return new OffMailer();
   return new ConsoleMailer(config.NODE_ENV);
 }
