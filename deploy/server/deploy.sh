@@ -24,6 +24,12 @@ main() {
     echo "Commit $target is not on origin/main; refusing to deploy it."; exit 1
   fi
   local previous; previous="$(git rev-parse HEAD)"
+  # Never move backwards: CI runs can finish out of order, and an older commit may lack files this
+  # deploy path needs (deploy-ssh.sh). The same commit is redeployed (a rebuild); a newer one goes ahead.
+  if [ "$target" != "$previous" ] && git merge-base --is-ancestor "$target" "$previous"; then
+    echo "$(git log --oneline -1 "$previous") is already deployed and is newer than $(git log --oneline -1 "$target"); nothing to do."
+    exit 0
+  fi
   echo "Deploying $(git log --oneline -1 "$target") (was $(git log --oneline -1 "$previous"))"
 
   # Ignored files (.env, api.env, tunnel/, backups/) are not touched by checkout.
