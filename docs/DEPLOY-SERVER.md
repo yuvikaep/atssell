@@ -56,7 +56,9 @@ ingress:
     service: http://web:80
   - service: http_status:404
 EOF
-cloudflared tunnel route dns rms rms.jobsmato.com      # CNAME rms → <ID>.cfargotunnel.com, proxied
+# CNAME rms → <ID>.cfargotunnel.com, proxied. Pass --config: without it cloudflared reads the server's
+# default config, which names the main tunnel, and points the record there instead.
+cloudflared tunnel --config tunnel/config.yml route dns --overwrite-dns $ID rms.jobsmato.com
 echo "COMPOSE_PROFILES=tunnel" >> .env
 docker compose up -d tunnel
 ```
