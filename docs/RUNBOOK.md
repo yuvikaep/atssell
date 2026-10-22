@@ -1,6 +1,6 @@
 # Runbook
 
-For whoever runs JobsMato in a pilot. Commands run from the repository root.
+For whoever runs RMS in a pilot. Commands run from the repository root.
 
 ## Environments
 | | Local development | Rehearsal stack | Production |
@@ -13,7 +13,7 @@ For whoever runs JobsMato in a pilot. Commands run from the repository root.
 `loadConfig` refuses to start in production with disk storage, the dev scanner or the console mailer.
 
 ## Deploying
-1. `docker build -f server/Dockerfile -t jobsmato-api .` and `docker build -f web/Dockerfile -t jobsmato-web .`
+1. `docker build -f server/Dockerfile -t rms-api .` and `docker build -f web/Dockerfile -t rms-web .`
 2. Run migrations first: `node server/dist/migrate-cli.js` (needs `DATABASE_URL_ADMIN`). It is idempotent and refuses to continue if an applied migration file was edited.
 3. Start the API (one process; it also runs the background worker) and the web container. Put TLS in front; set `WEB_ORIGIN` to the public HTTPS origin.
 4. Create a company: `docker compose run --rm tenant --name … --slug … --admin-email … --admin-name …`. Send the admin the printed one-time link.

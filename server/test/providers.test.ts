@@ -96,7 +96,7 @@ describe('SmtpMailer', () => {
     const transport = nodemailer.createTransport({ jsonTransport: true });
     const sent: { subject: string; text: string; to: string; from: string }[] = [];
     const spy = { sendMail: async (o: never) => { const r = await transport.sendMail(o); sent.push(JSON.parse(r.message as string)); return r; } };
-    await fn(new SmtpMailer(spy as never, 'JobsMato <no-reply@example.com>'));
+    await fn(new SmtpMailer(spy as never, 'RMS <no-reply@example.com>'));
     return sent[0]!;
   };
 
