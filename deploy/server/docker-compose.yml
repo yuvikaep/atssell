@@ -1,0 +1,80 @@
+# RMS on a single server behind a Cloudflare tunnel (rms.jobsmato.com). See docs/DEPLOY-SERVER.md.
+# Run from this folder. .env holds the database passwords (used by Compose itself); api.env holds the
+# API's own secrets and email settings, so the API never sees the database owner's password:
+#
+#   docker compose build
+#   docker compose up -d
+#
+# Only rms_web is published, on 127.0.0.1 so that nothing but the tunnel on this machine can reach it.
+name: rms
+
+x-api-image: &api-image
+  image: rms-api:latest
+  build: { context: ../.., dockerfile: server/Dockerfile }
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: rms_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rms
+      POSTGRES_USER: rms_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U rms_owner -d rms"], interval: 5s, timeout: 3s, retries: 20 }
+
+  # Applies migrations as the owner and creates the restricted app role (NOBYPASSRLS) the API connects as.
+  migrate:
+    <<: *api-image
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      DATABASE_URL_ADMIN: postgres://rms_owner:${POSTGRES_PASSWORD}@db:5432/rms
+      APP_DB_ROLE: rms_app
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
+    command: ["node", "server/dist/migrate-cli.js"]
+    restart: "no"
+
+  api:
+    <<: *api-image
+    container_name: rms_api
+    restart: unless-stopped
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    # IP_HASH_SALT, FILE_URL_SECRET, MAIL_DRIVER, SMTP_* (see api.env.example).
+    env_file: api.env
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: "3000"
+      DATABASE_URL: postgres://rms_app:${APP_DB_PASSWORD}@db:5432/rms
+      WEB_ORIGIN: ${WEB_ORIGIN:-https://rms.jobsmato.com}
+      STORAGE_DRIVER: local
+      ALLOW_LOCAL_STORAGE: "true"
+      STORAGE_DIR: /data/files
+      SCANNER_DRIVER: ${SCANNER_DRIVER:-none}
+    volumes: ["files:/data/files"]
+
+  web:
+    image: rms-web:latest
+    build: { context: ../.., dockerfile: web/Dockerfile }
+    container_name: rms_web
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      # Safe only because the port below is bound to 127.0.0.1 and the tunnel is the only way in.
+      TRUST_CF_CONNECTING_IP: "on"
+    ports: ["127.0.0.1:${WEB_PORT:-5010}:80"]
+
+  # Tools, not started by "up": docker compose run --rm tenant --name "Acme" --slug acme --admin-email ... --admin-name ...
+  tenant:
+    <<: *api-image
+    profiles: ["tools"]
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      DATABASE_URL_ADMIN: postgres://rms_owner:${POSTGRES_PASSWORD}@db:5432/rms
+      WEB_ORIGIN: ${WEB_ORIGIN:-https://rms.jobsmato.com}
+    entrypoint: ["node", "server/dist/create-tenant-cli.js"]
+
+volumes:
+  pgdata: {}
+  files: {}

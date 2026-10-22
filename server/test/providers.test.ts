@@ -120,6 +120,9 @@ describe('SmtpMailer', () => {
 describe('production configuration', () => {
   it('refuses development providers in production', () => {
     expect(() => loadConfig({ ...base, NODE_ENV: 'production', STORAGE_DRIVER: 'local' })).toThrow(/STORAGE_DRIVER=s3/);
+    // A single server can opt in to local disk, on an absolute path (a mounted, backed-up volume).
+    expect(loadConfig({ ...base, NODE_ENV: 'production', STORAGE_DRIVER: 'local', ALLOW_LOCAL_STORAGE: 'true', STORAGE_DIR: '/data/files' }).STORAGE_DRIVER).toBe('local');
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', STORAGE_DRIVER: 'local', ALLOW_LOCAL_STORAGE: 'true' })).toThrow(/absolute path/);
     expect(() => loadConfig({ ...base, NODE_ENV: 'production', SCANNER_DRIVER: 'dev' })).toThrow(/SCANNER_DRIVER=clamav/);
     expect(() => loadConfig({ ...base, NODE_ENV: 'production', MAIL_DRIVER: 'console' })).toThrow(/MAIL_DRIVER=smtp/);
   });

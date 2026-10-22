@@ -9,3 +9,4 @@ coverage/
 backups/
 .vercel/
 .env.prod
+api.env

@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { z } from 'zod';
 
 const ConfigSchema = z.object({
@@ -20,6 +21,8 @@ const ConfigSchema = z.object({
   IP_HASH_SALT: z.string().min(1),
   // Relative paths resolve from the repository root.
   STORAGE_DIR: z.string().default('.storage'),
+  // Production refuses local disk unless this is "true": a single server with STORAGE_DIR on a backed-up volume.
+  ALLOW_LOCAL_STORAGE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   FILE_URL_SECRET: z.string().min(16),
   // Outside services. Unset, they default to the development stubs, or to 'off' in production: an
   // 'off' service refuses the feature that needs it (uploads, exports, email) instead of the API failing to start.
@@ -109,7 +112,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (config.SCANNER_DRIVER === 'http' && (!config.SCANNER_URL || !config.SCANNER_TOKEN)) throw new Error('SCANNER_URL and SCANNER_TOKEN are required when SCANNER_DRIVER=http');
   if (config.NODE_ENV === 'production') {
     if (config.SCANNER_DRIVER === 'http' && !config.SCANNER_URL!.startsWith('https://')) throw new Error('SCANNER_URL must be https:// in production');
-    if (config.STORAGE_DRIVER === 'local') throw new Error('Production needs STORAGE_DRIVER=s3 or blob (or off): local disk is for development');
+    if (config.STORAGE_DRIVER === 'local' && !config.ALLOW_LOCAL_STORAGE) {
+      throw new Error('Production needs STORAGE_DRIVER=s3 or blob (or off), or ALLOW_LOCAL_STORAGE=true with STORAGE_DIR on a backed-up volume');
+    }
+    if (config.STORAGE_DRIVER === 'local' && !path.isAbsolute(config.STORAGE_DIR)) {
+      throw new Error('STORAGE_DIR must be an absolute path in production, such as /data/files on a mounted volume');
+    }
     if (config.SCANNER_DRIVER === 'dev') throw new Error('Production needs SCANNER_DRIVER=clamav (or off): the dev scanner only catches the EICAR test file');
     if (config.MAIL_DRIVER === 'console') throw new Error('Production needs MAIL_DRIVER=smtp (or off): the console mailer prints live links');
     if (config.IP_HASH_SALT.startsWith('dev-only')) throw new Error('IP_HASH_SALT must be set to a random value in production');

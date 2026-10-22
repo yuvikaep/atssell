@@ -28,7 +28,7 @@ async function start(config: Config) {
     await db.destroy();
     return serveMisconfigured(err);
   }
-  // Production refuses local disk, the dev scanner and the console mailer (see loadConfig).
+  // Production refuses the dev scanner, the console mailer and (unless ALLOW_LOCAL_STORAGE) local disk; see loadConfig.
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const storage = createStorage(config, root);
   const app = await buildApp({

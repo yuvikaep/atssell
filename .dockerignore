@@ -8,3 +8,6 @@ backups
 .git
 .claude
 PRD
+**/.env
+**/api.env
+**/backups
