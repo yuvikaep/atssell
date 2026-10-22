@@ -98,3 +98,31 @@ describe('sourcing ID and temp employee ID', () => {
     expect((await list('?selected=no')).some((r) => r.application_id === b.applicationId)).toBe(true);
   });
 });
+
+describe('an interviewer decides on the candidate they interviewed', () => {
+  it('selects, holds, rejects or sends to the next round without the decision permission; others cannot', async () => {
+    const { addUser, login } = await import('./helpers.js');
+    const head = await addUser(ctx, s.co.tenant.id, { email: `head@${s.co.slug}.test`, role: 'interviewer' });
+    const outsider = await addUser(ctx, s.co.tenant.id, { email: `other@${s.co.slug}.test`, role: 'interviewer' });
+    const headCookie = await login(ctx, s.co.slug, `head@${s.co.slug}.test`);
+    const otherCookie = await login(ctx, s.co.slug, `other@${s.co.slug}.test`);
+    const a = await assigned('ggggggg');
+    const iv = await scheduleInterview(ctx, recruiter, a.applicationId, { scheduled_start: inHours(-2), scheduled_end: inHours(-1), panel: [{ user_id: head.id }] });
+    expect((await call(ctx, headCookie, 'POST', `/me/interviews/${iv.id}/feedback`, goodFeedback())).statusCode).toBe(201);
+
+    const detail = (await call(ctx, headCookie, 'GET', `/me/interviews/${iv.id}`)).json().data;
+    expect(detail).toMatchObject({ application_id: a.applicationId, can_decide: true });
+
+    expect((await call(ctx, otherCookie, 'POST', `/applications/${a.applicationId}/decisions`, { decision: 'select' })).statusCode).not.toBe(201);
+    expect((await call(ctx, headCookie, 'POST', `/applications/${a.applicationId}/decisions`, { decision: 'hold', reason: 'Check notice' })).statusCode).toBe(201);
+    const next = await call(ctx, headCookie, 'POST', `/applications/${a.applicationId}/next-round`, { remark: 'Meet the director', interviewer_user_ids: [outsider.id] });
+    expect(next.statusCode, next.body).toBe(201);
+    expect((await call(ctx, headCookie, 'GET', '/directory/users')).statusCode).toBe(200);
+    expect((await call(ctx, headCookie, 'POST', `/applications/${a.applicationId}/decisions`, { decision: 'select' })).statusCode).toBe(201);
+    const last = await ctx.adminDb.selectFrom('hiring_decisions').select(['decision', 'decided_by']).where('application_id', '=', a.applicationId).orderBy('decided_at', 'desc').executeTakeFirstOrThrow();
+    expect(last).toEqual({ decision: 'select', decided_by: head.id });
+    // Selected, not joined yet: listed under Employees → Yet to join, with the temp ID.
+    const yet = (await call(ctx, admin, 'GET', '/employment/yet-to-join')).json().data;
+    expect(yet.find((r: { application_id: string }) => r.application_id === a.applicationId)?.temp_employee_code).toMatch(/^TEMP-/);
+  });
+});

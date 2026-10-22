@@ -559,6 +559,9 @@ export interface FeedbackBootstrap {
 
 export interface MyInterviewDetail extends FeedbackBootstrap {
   request: NextRoundRequest | null;
+  application_id: string;
+  can_decide: boolean;
+  last_decision: { decision: string; reason: string | null; decided_at: string } | null;
   id: string;
   status: InterviewStatus;
   feedback_status: 'pending' | 'submitted' | 'waived';

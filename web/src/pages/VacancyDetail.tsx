@@ -134,7 +134,7 @@ function Recruiters({ v }: { v: VacancyDetail }) {
     onSuccess: refresh,
   });
   const assignedIds = new Set(v.recruiters.map((r) => r.id));
-  const candidates = (users.data?.data ?? []).filter((u) => !assignedIds.has(u.id) && u.roles.some((r) => !r.code.startsWith('agency')));
+  const candidates = (users.data?.data ?? []).filter((u) => !assignedIds.has(u.id) && u.roles.some((r) => r.code === 'internal_recruiter'));
 
   return (
     <div className="card section">

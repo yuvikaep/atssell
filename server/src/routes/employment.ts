@@ -145,6 +145,33 @@ export async function employmentRoutes(app: FastifyInstance) {
     });
   });
 
+  // Selected (they have a temp employee ID) but not marked joined yet.
+  app.get('/employment/yet-to-join', async (req) => {
+    const p = principal(req);
+    need(p);
+    const f = z.object({ q: z.string().trim().max(200).optional(), vacancy_id: z.uuid().optional() }).parse(req.query);
+    return withTenant(db, p.tenantId, async (tx) => {
+      let q = tx.selectFrom('applications as a')
+        .innerJoin('candidates as c', 'c.id', 'a.candidate_id')
+        .innerJoin('vacancies as v', 'v.id', 'a.vacancy_id')
+        .leftJoin('submissions as sb', (j) => j.onRef('sb.application_id', '=', 'a.id').on('sb.ownership_state', '=', 'accepted'))
+        .leftJoin('agencies as ag', 'ag.id', 'sb.agency_id')
+        .leftJoin('users as su', 'su.id', 'sb.source_user_id')
+        .select(['a.id as application_id', 'a.sourcing_code', 'a.temp_employee_code', 'c.id as candidate_id', 'c.full_name as candidate_name', 'c.current_title',
+          'v.id as vacancy_id', 'v.title as job_title', 'ag.name as agency_name', 'su.full_name as recruiter_name',
+          (eb) => eb.selectFrom('hiring_decisions as d').select('d.decided_at').whereRef('d.application_id', '=', 'a.id').where('d.decision', '=', 'select').orderBy('d.decided_at', 'desc').limit(1).as('selected_on')])
+        .where('a.temp_employee_code', 'is not', null)
+        .where('a.status', '=', 'active')
+        .where((eb) => eb.not(eb.exists(eb.selectFrom('employment_records as e').select('e.id').whereRef('e.application_id', '=', 'a.id'))));
+      if (f.vacancy_id) q = q.where('a.vacancy_id', '=', f.vacancy_id);
+      if (f.q) {
+        const like = `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        q = q.where((eb) => eb.or([eb('c.full_name', 'ilike', like), eb('a.sourcing_code', 'ilike', like), eb('a.temp_employee_code', 'ilike', like)]));
+      }
+      return { data: await q.orderBy('a.temp_employee_code').limit(500).execute() };
+    });
+  });
+
   app.post('/employment/:id/exit', async (req) => {
     const p = principal(req);
     need(p);

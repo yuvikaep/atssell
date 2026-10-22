@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { z } from 'zod';
-import { hasAny, vacancyVisible } from '../access.js';
+import { hasAny, vacancyVisible, interviewedApplication, isOnAnyPanel } from '../access.js';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
 import type { EvaluationTemplate } from '../db-types.js';
@@ -245,16 +245,18 @@ export async function interviewRoutes(app: FastifyInstance) {
   // who cannot list users in general. Only name and work email: nothing about roles or access.
   app.get('/directory/users', async (req) => {
     const p = principal(req);
-    if (!hasAny(p, 'interviews.manage') && !hasAny(p, 'vacancies.manage') && !hasAny(p, 'feedback_links.manage')) throw forbidden();
-    const rows = await withTenant(db, p.tenantId, (tx) =>
-      tx
+    const rows = await withTenant(db, p.tenantId, async (tx) => {
+      // Interviewers may pick colleagues for a next round they request.
+      if (!hasAny(p, 'interviews.manage') && !hasAny(p, 'vacancies.manage') && !hasAny(p, 'feedback_links.manage') && !(await isOnAnyPanel(tx, p.userId))) throw forbidden();
+      return tx
         .selectFrom('users as u')
         .leftJoin('agency_members as am', 'am.user_id', 'u.id')
         .select(['u.id', 'u.full_name', 'u.email'])
         .where('u.status', '=', 'active')
         .where('am.id', 'is', null)
         .orderBy('u.full_name')
-        .execute());
+        .execute();
+    });
     return { data: rows };
   });
 
@@ -460,16 +462,21 @@ export async function interviewRoutes(app: FastifyInstance) {
     const { id: applicationId } = idParams.parse(req.params);
     const body = NextRoundBody.parse(req.body);
     const created = await withTenant(db, p.tenantId, async (tx) => {
+      // An interviewer of this candidate can send them to the next round themselves.
+      const interviewed = await interviewedApplication(tx, p.userId, applicationId);
       const app0 = await tx
         .selectFrom('applications as a')
         .innerJoin('vacancies as v', 'v.id', 'a.vacancy_id')
         .innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id')
         .innerJoin('candidates as c', 'c.id', 'a.candidate_id')
         .select(['a.id', 'a.status', 'a.vacancy_id', 'v.title as vacancy_title', 'v.owner_user_id', 'rq.department_id', 'c.full_name as candidate_name'])
-        .where('a.id', '=', applicationId).where(vacancyVisible(p, null)).forUpdate('a').executeTakeFirst();
+        .where('a.id', '=', applicationId)
+        .$if(!interviewed, (q) => q.where(vacancyVisible(p, null))).forUpdate('a').executeTakeFirst();
       if (!app0) throw notFound('Application');
-      requirePermission(p, 'decisions.record', app0.department_id);
-      requirePermission(p, 'interviews.manage', app0.department_id);
+      if (!interviewed) {
+        requirePermission(p, 'decisions.record', app0.department_id);
+        requirePermission(p, 'interviews.manage', app0.department_id);
+      }
       if (app0.status !== 'active') throw new AppError(409, 'APPLICATION_CLOSED', 'This application is closed.');
       const people = [...new Set(body.interviewer_user_ids)];
 
@@ -492,7 +499,7 @@ export async function interviewRoutes(app: FastifyInstance) {
       for (const userId of people) {
         await notifyUser(tx, { tenantId: p.tenantId, userId, eventType: 'interview.next_round_requested', dedupeKey: `next_round_panel:${interview.id}:${userId}`, title: `You will interview ${app0.candidate_name}`, body: `${p.fullName}: "${body.remark}" Time to be confirmed by the recruiter.`, link: '/my-interviews' });
       }
-      return interviewDetail(tx, p, interview.id);
+      return interviewed && !hasAny(p, 'interviews.manage') ? { id: interview.id } : interviewDetail(tx, p, interview.id);
     });
     return reply.status(201).send({ data: created });
   });

@@ -4,6 +4,12 @@ import { useState } from 'react';
 import { api, formatDay, formatInr } from '../api';
 import { Badge, Dialog, EmptyState, ErrorState, Field, fieldError, FormError, Loading, type Tone, IdTags } from '../components/ui';
 import { MODEL_LABEL } from './HrDashboard';
+import { JoinDialog } from '../components/JoinDialog';
+
+interface YetToJoin {
+  application_id: string; sourcing_code: string; temp_employee_code: string; candidate_id: string; candidate_name: string; current_title: string | null;
+  vacancy_id: string; job_title: string; agency_name: string | null; recruiter_name: string | null; selected_on: string | null;
+}
 
 interface Emp {
   id: string; sourcing_code: string; temp_employee_code: string | null; candidate_name: string; vacancy_id: string; job_title: string; joined_on: string; designation: string; annual_ctc: number; status: 'active' | 'exited';
@@ -18,11 +24,14 @@ const REP_TONE: Record<string, Tone> = { due: 'warning', replaced: 'success', ex
 /** After the offer: who joined, who is still here, who left, and the replacements agencies owe. */
 export function EmployeesPage() {
   const [tab, setTab] = useState<'people' | 'replacements'>('people');
-  const [status, setStatus] = useState<'all' | 'active' | 'exited'>('all');
+  const [status, setStatus] = useState<'all' | 'yet_to_join' | 'active' | 'exited'>('all');
+  const [joining, setJoining] = useState<YetToJoin | null>(null);
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
   const [exiting, setExiting] = useState<Emp | null>(null);
-  const people = useQuery({ queryKey: ['employment', status, search], queryFn: () => api<{ data: Emp[] }>('GET', `/employment?status=${status}${search ? `&q=${encodeURIComponent(search)}` : ''}`).then((r) => r.data) });
+  const q = search ? `&q=${encodeURIComponent(search)}` : '';
+  const people = useQuery({ queryKey: ['employment', status, search], enabled: status !== 'yet_to_join', queryFn: () => api<{ data: Emp[] }>('GET', `/employment?status=${status}${q}`).then((r) => r.data) });
+  const yet = useQuery({ queryKey: ['employment', 'yet-to-join', search], enabled: status === 'all' || status === 'yet_to_join', queryFn: () => api<{ data: YetToJoin[] }>('GET', `/employment/yet-to-join?${q.slice(1)}`).then((r) => r.data) });
   const reps = useQuery({ queryKey: ['replacements'], queryFn: () => api<{ data: Rep[] }>('GET', '/replacements').then((r) => r.data) });
   const invoice = useMutation({
     mutationFn: (v: { id: string; invoice_status: string }) => api('PATCH', `/employment/${v.id}/invoice`, { invoice_status: v.invoice_status }),
@@ -31,16 +40,17 @@ export function EmployeesPage() {
   const due = reps.data?.filter((r) => r.status === 'due').length ?? 0;
   return (
     <>
-      <div className="page-header"><div><h1>Employees</h1><p>Joining, employment status, exits, and replacements agencies owe. Mark people joined from Candidates.</p></div></div>
+      <div className="page-header"><div><h1>Employees</h1><p>Joining, employment status, exits, and replacements agencies owe. Selected candidates wait under Yet to join until you mark them joined.</p></div></div>
       <div className="card">
         <div className="toolbar" role="tablist" aria-label="View">
           <button role="tab" aria-selected={tab === 'people'} className={`btn btn-sm ${tab === 'people' ? 'btn-primary' : ''}`} onClick={() => setTab('people')}>People</button>
           <button role="tab" aria-selected={tab === 'replacements'} className={`btn btn-sm ${tab === 'replacements' ? 'btn-primary' : ''}`} onClick={() => setTab('replacements')}>Replacements{due > 0 ? ` (${due} due)` : ''}</button>
           {tab === 'people' && (<><span style={{ flex: 1 }} /><input type="search" placeholder="Name, sourcing or temp ID" aria-label="Search" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 220 }} />
-            <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="all">All</option><option value="active">Active</option><option value="exited">Exited</option></select></>)}
+            <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="all">All</option><option value="yet_to_join">Yet to join</option><option value="active">Active</option><option value="exited">Exited</option></select></>)}
         </div>
-        {tab === 'people' ? (people.isPending ? <Loading /> : people.isError ? <ErrorState error={people.error} onRetry={() => people.refetch()} /> : people.data.length === 0 ? (
-          <EmptyState title="Nobody has joined yet">Open Candidates and choose Mark joined when someone starts.</EmptyState>
+        {tab === 'people' && (status === 'all' || status === 'yet_to_join') && <YetToJoinTable q={yet} onJoin={setJoining} />}
+        {tab === 'people' && status === 'yet_to_join' ? null : tab === 'people' ? (people.isPending ? <Loading /> : people.isError ? <ErrorState error={people.error} onRetry={() => people.refetch()} /> : people.data.length === 0 ? (
+          <EmptyState title="Nobody has joined yet">Selected candidates appear under Yet to join; choose Mark joined when they start.</EmptyState>
         ) : (
           <div className="table-wrap"><table className="board-table">
             <thead><tr><th>Employee</th><th>Job</th><th>Source</th><th>Joined</th><th className="num">CTC</th><th>Status</th><th>Terms and fee</th><th>Invoice</th><th /></tr></thead>
@@ -65,6 +75,7 @@ export function EmployeesPage() {
         {invoice.error && <div style={{ padding: 12 }}><FormError error={invoice.error} /></div>}
       </div>
       {exiting && <ExitDialog e={exiting} onClose={() => setExiting(null)} />}
+      {joining && <JoinDialog applicationId={joining.application_id} name={joining.candidate_name} title={joining.current_title} onClose={() => { setJoining(null); queryClient.invalidateQueries({ queryKey: ['employment'] }); }} />}
     </>
   );
 }
@@ -143,5 +154,30 @@ function WaiveDialog({ rep, onClose }: { rep: Rep; onClose: () => void }) {
       <FormError error={save.error} />
       <Field id="waive-notes" label="Why is it waived?"><textarea id="waive-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
     </Dialog>
+  );
+}
+
+/** Selected candidates (with a temp employee ID) who have not joined yet. */
+function YetToJoinTable({ q, onJoin }: { q: { isPending: boolean; isError: boolean; error: unknown; data?: YetToJoin[]; refetch: () => unknown }; onJoin: (r: YetToJoin) => void }) {
+  if (q.isPending) return <Loading />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  if (!q.data?.length) return null;
+  return (
+    <div className="section" style={{ paddingBottom: 0 }}>
+      <h2 style={{ marginBottom: 8 }}>Yet to join <span className="count">{q.data.length}</span></h2>
+      <div className="table-wrap"><table className="board-table">
+        <thead><tr><th>Candidate</th><th>Job</th><th>Source</th><th>Selected on</th><th>Status</th><th /></tr></thead>
+        <tbody>{q.data.map((r) => (
+          <tr key={r.application_id}>
+            <td><Link className="row-link" to="/candidates/$id" params={{ id: r.candidate_id }} search={{}}>{r.candidate_name}</Link>{r.current_title && <div className="cell-sub">{r.current_title}</div>}<IdTags sourcing={r.sourcing_code} temp={r.temp_employee_code} /></td>
+            <td><Link className="row-link" to="/vacancies/$id" params={{ id: r.vacancy_id }}>{r.job_title}</Link></td>
+            <td>{r.agency_name ?? r.recruiter_name ?? '—'}</td>
+            <td>{r.selected_on ? formatDay(r.selected_on) : '—'}</td>
+            <td><Badge tone="warning">Yet to join</Badge></td>
+            <td className="actions"><button className="btn btn-sm btn-primary" onClick={() => onJoin(r)}>Mark joined</button></td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+    </div>
   );
 }

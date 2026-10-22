@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useDeferredValue, useState } from 'react';
+import { JoinDialog } from '../components/JoinDialog';
 import { api, can, formatDay } from '../api';
 import { useMe } from '../components/AppShell';
 import { ScheduleDialog } from '../components/ScheduleDialog';
@@ -152,7 +153,7 @@ export function CandidateMasterPage() {
       {dialog && 'row' in dialog && dialog.kind === 'schedule' && <ScheduleDialog applicationId={dialog.row.application_id!} vacancyId={dialog.row.vacancy_id!} onClose={() => { setDialog(null); refresh(); }} />}
       {dialog && 'row' in dialog && dialog.kind === 'decision' && <DecisionDialog row={dialog.row} onClose={() => { setDialog(null); refresh(); }} />}
       {dialog && 'row' in dialog && dialog.kind === 'offer' && <OfferDialog row={dialog.row} onClose={() => { setDialog(null); refresh(); }} />}
-      {dialog && 'row' in dialog && dialog.kind === 'join' && <JoinDialog row={dialog.row} onClose={() => { setDialog(null); refresh(); }} />}
+      {dialog && 'row' in dialog && dialog.kind === 'join' && <JoinDialog applicationId={dialog.row.application_id!} name={dialog.row.full_name} title={dialog.row.current_title} onClose={() => { setDialog(null); refresh(); }} />}
     </>
   );
 }
@@ -182,22 +183,6 @@ function OfferDialog({ row, onClose }: { row: Row; onClose: () => void }) {
       <Field id="of-ctc" label="Offered CTC (₹ per year)" error={fieldError(save.error, 'offered_ctc')}><input id="of-ctc" inputMode="numeric" value={ctc} onChange={(e) => setCtc(e.target.value.replace(/[^\d.]/g, ''))} /></Field>
       <Field id="of-status" label="Offer status"><select id="of-status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="offered">Offered</option><option value="accepted">Accepted</option><option value="declined">Declined</option></select></Field>
       {status === 'declined' && <Field id="of-why" label="Why did they decline?"><textarea id="of-why" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>}
-    </Dialog>
-  );
-}
-
-function JoinDialog({ row, onClose }: { row: Row; onClose: () => void }) {
-  const [on, setOn] = useState(new Date().toISOString().slice(0, 10));
-  const [designation, setDesignation] = useState(row.current_title ?? '');
-  const [ctc, setCtc] = useState('');
-  const save = useMutation({ mutationFn: () => api('POST', `/applications/${row.application_id}/join`, { joined_on: on, designation, annual_ctc: Number(ctc) }), onSuccess: onClose });
-  return (
-    <Dialog open title={`Mark ${row.full_name} as joined`} onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={save.isPending || !designation.trim() || !ctc} onClick={() => save.mutate()}>Mark joined</button></>}>
-      <FormError error={save.error} />
-      <p className="muted" style={{ marginTop: 0 }}>This records the actual date of joining and the agreed CTC. For agency hires it fixes the commercial terms that apply today.</p>
-      <Field id="j-on" label="Date of joining"><input id="j-on" type="date" value={on} onChange={(e) => setOn(e.target.value)} /></Field>
-      <Field id="j-des" label="Designation"><input id="j-des" value={designation} onChange={(e) => setDesignation(e.target.value)} /></Field>
-      <Field id="j-ctc" label="Agreed annual CTC (₹)"><input id="j-ctc" inputMode="numeric" value={ctc} onChange={(e) => setCtc(e.target.value.replace(/[^\d.]/g, ''))} /></Field>
     </Dialog>
   );
 }

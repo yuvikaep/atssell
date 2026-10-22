@@ -159,3 +159,20 @@ export function redactCandidate<T extends Record<string, unknown>>(p: Principal,
   }
   return out as Partial<T>;
 }
+
+/**
+ * Someone who interviewed this candidate for this job (on any round's panel). They may decide on it
+ * themselves (select, hold, reject, next round) without the decision permission, so a department head
+ * who interviews does not need an admin to confirm each step.
+ */
+export async function interviewedApplication(tx: Tx, userId: string, applicationId: string) {
+  const row = await tx.selectFrom('interviewers as m').innerJoin('interviews as i', 'i.id', 'm.interview_id')
+    .select('m.id').where('m.user_id', '=', userId).where('i.application_id', '=', applicationId).where('i.status', '<>', 'cancelled')
+    .executeTakeFirst();
+  return !!row;
+}
+
+/** Whether this person sits on any interview panel at all. */
+export async function isOnAnyPanel(tx: Tx, userId: string) {
+  return !!(await tx.selectFrom('interviewers').select('id').where('user_id', '=', userId).executeTakeFirst());
+}
