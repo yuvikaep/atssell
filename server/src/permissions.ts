@@ -15,6 +15,8 @@ export interface Principal {
   email: string;
   fullName: string;
   sessionId: string;
+  /** An admin chose this person's password; they must pick their own before doing anything else. */
+  mustChangePassword: boolean;
   roles: { code: string; name: string; departmentId: string | null }[];
   permissions: Record<string, PermissionScope>;
 }

@@ -5,7 +5,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
-import { createDb } from './db.js';
+import { assertRlsEnforced, createDb, RlsBypassError } from './db.js';
+import { postgresRateLimitStore } from './rate-limit-store.js';
 import { misconfiguredApp } from './misconfigured.js';
 import { waitUntil } from '@vercel/functions';
 import { createMailer, createScanner, createStorage } from './providers/index.js';
@@ -22,10 +23,21 @@ async function load(): Promise<FastifyInstance> {
   }
   // Each instance serves one request at a time; a few connections are plenty. Use Neon's pooled URL.
   const db = createDb(config.DATABASE_URL, Math.min(config.DB_POOL_MAX, 3));
+  try {
+    await assertRlsEnforced(db);
+  } catch (err) {
+    // A connection failure is thrown so the next request tries again; a wrong role is a settings problem.
+    if (!(err instanceof RlsBypassError)) { await db.destroy(); throw err; }
+    await db.destroy();
+    return misconfiguredApp(err);
+  }
   const mailer = createMailer(config);
   const storage = createStorage(config, '/tmp');
   const worker = serverlessWorker({ db, mailer, config, storage, log: (msg, extra) => console.info(JSON.stringify({ msg, ...extra })) }, { waitUntil });
-  return buildApp({ config, db, mailer, storage, scanner: createScanner(config), afterAuthenticatedRequest: worker });
+  return buildApp({
+    config, db, mailer, storage, scanner: createScanner(config), afterAuthenticatedRequest: worker,
+    rateLimitStore: postgresRateLimitStore(db, config.IP_HASH_SALT),
+  });
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {

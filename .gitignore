@@ -9,3 +9,5 @@ coverage/
 backups/
 .vercel/
 .env.prod
+api.env
+deploy/server/tunnel/

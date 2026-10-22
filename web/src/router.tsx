@@ -67,14 +67,17 @@ const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'app',
   beforeLoad: async ({ context, location }) => {
+    let me;
     try {
-      await context.queryClient.ensureQueryData(meQuery);
+      me = await context.queryClient.ensureQueryData(meQuery);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         throw redirect({ to: '/login', search: { redirect: location.href === '/' ? undefined : location.href } });
       }
       throw err;
     }
+    // An admin chose this person's first password: they pick their own before anything else.
+    if (me.user.must_change_password && location.pathname !== '/account') throw redirect({ to: '/account' });
   },
   component: AppShell,
 });

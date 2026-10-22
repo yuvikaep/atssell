@@ -133,7 +133,38 @@ describe('admin creates a login while email is off', () => {
     const signin = await ctx.app.inject({ method: 'POST', url: '/api/v1/auth/login', remoteAddress: nextIp(), payload: { company: co.slug, email: 'manual.login@inv.test', password: 'first-password-123' } });
     expect(signin.statusCode).toBe(200);
     expect((await call(ctx, cookie, 'POST', `/users/invitations/${id}/create-login`, { full_name: 'Again', password: 'first-password-123' })).statusCode).toBe(410);
-    const recruiter = await call(ctx, sessionCookie(signin), 'POST', `/users/invitations/${id}/create-login`, { full_name: 'X', password: 'first-password-123' });
+    const recruiterCookie = sessionCookie(signin);
+    expect((await call(ctx, recruiterCookie, 'POST', '/me/password', { current_password: 'first-password-123', new_password: 'my-own-password-456' })).statusCode).toBe(200);
+    const recruiter = await call(ctx, recruiterCookie, 'POST', `/users/invitations/${id}/create-login`, { full_name: 'X', password: 'first-password-123' });
     expect(recruiter.statusCode).toBe(403);
+    expect(recruiter.json().error.code).toBe('FORBIDDEN');
+  });
+
+  it('makes the person choose their own password before they can do anything else', async () => {
+    const { res } = await invite('forced.change@inv.test');
+    const id = res.json().data.id;
+    expect((await call(ctx, cookie, 'POST', `/users/invitations/${id}/create-login`, { full_name: 'Forced Change', password: 'admin-chose-this-1' })).statusCode).toBe(201);
+    const them = await login(ctx, co.slug, 'forced.change@inv.test', 'admin-chose-this-1');
+
+    const me = await call(ctx, them, 'GET', '/me');
+    expect(me.statusCode).toBe(200);
+    expect(me.json().data.user.must_change_password).toBe(true);
+    for (const [method, url] of [['GET', '/vacancies'], ['GET', '/candidates'], ['GET', '/notifications'], ['POST', '/users/invitations']] as const) {
+      const blocked = await call(ctx, them, method, url, method === 'GET' ? undefined : {});
+      expect(blocked.statusCode, `${method} ${url}`).toBe(403);
+      expect(blocked.json().error.code).toBe('PASSWORD_CHANGE_REQUIRED');
+    }
+
+    expect((await call(ctx, them, 'POST', '/me/password', { current_password: 'admin-chose-this-1', new_password: 'now-it-is-mine-2' })).statusCode).toBe(200);
+    expect((await call(ctx, them, 'GET', '/me')).json().data.user.must_change_password).toBe(false);
+    expect((await call(ctx, them, 'GET', '/vacancies')).statusCode).toBe(200);
+  });
+
+  it('does not ask people who chose their own password through an invitation link', async () => {
+    const { res, token } = await invite('chose.own@inv.test');
+    expect(res.statusCode).toBe(201);
+    expect((await publicPost('/invitations/accept', { token, full_name: 'Chose Own', password: 'picked-it-myself-1' })).statusCode).toBe(201);
+    const them = await login(ctx, co.slug, 'chose.own@inv.test', 'picked-it-myself-1');
+    expect((await call(ctx, them, 'GET', '/me')).json().data.user.must_change_password).toBe(false);
   });
 });

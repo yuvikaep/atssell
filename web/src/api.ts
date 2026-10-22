@@ -41,7 +41,7 @@ export interface Me {
   limits?: { resume_max_bytes: number };
   /** Departments this person heads: they see those employees and can mark exits. */
   head_of_departments?: string[];
-  user: { id: string; email: string; full_name: string };
+  user: { id: string; email: string; full_name: string; must_change_password?: boolean };
   tenant: { id: string; name: string; slug: string };
   roles: { code: string; name: string; department_id: string | null }[];
   permissions: Record<string, PermissionScope>;

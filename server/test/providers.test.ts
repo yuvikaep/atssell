@@ -2,7 +2,7 @@ import net from 'node:net';
 import nodemailer from 'nodemailer';
 import { afterAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
-import { createMailer, createScanner, createStorage } from '../src/providers/index.js';
+import { createMailer, createScanner, createStorage, smtpTransportOptions } from '../src/providers/index.js';
 import { ClamAvScanner } from '../src/providers/clamav.js';
 import { S3Storage } from '../src/providers/s3.js';
 import { SmtpMailer } from '../src/providers/smtp.js';
@@ -120,6 +120,9 @@ describe('SmtpMailer', () => {
 describe('production configuration', () => {
   it('refuses development providers in production', () => {
     expect(() => loadConfig({ ...base, NODE_ENV: 'production', STORAGE_DRIVER: 'local' })).toThrow(/STORAGE_DRIVER=s3/);
+    // A single server can opt in to local disk, on an absolute path (a mounted, backed-up volume).
+    expect(loadConfig({ ...base, NODE_ENV: 'production', STORAGE_DRIVER: 'local', ALLOW_LOCAL_STORAGE: 'true', STORAGE_DIR: '/data/files' }).STORAGE_DRIVER).toBe('local');
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', STORAGE_DRIVER: 'local', ALLOW_LOCAL_STORAGE: 'true' })).toThrow(/absolute path/);
     expect(() => loadConfig({ ...base, NODE_ENV: 'production', SCANNER_DRIVER: 'dev' })).toThrow(/SCANNER_DRIVER=clamav/);
     expect(() => loadConfig({ ...base, NODE_ENV: 'production', MAIL_DRIVER: 'console' })).toThrow(/MAIL_DRIVER=smtp/);
   });
@@ -153,5 +156,31 @@ describe('production configuration', () => {
     expect(ok.STORAGE_DRIVER).toBe('s3');
     expect(() => loadConfig({ ...base, STORAGE_DRIVER: 's3' })).toThrow(/S3_BUCKET/);
     expect(() => loadConfig({ ...base, MAIL_DRIVER: 'smtp' })).toThrow(/SMTP_URL/);
+  });
+});
+
+describe('SMTP settings', () => {
+  const gmail = { ...base, MAIL_DRIVER: 'smtp', SMTP_HOST: 'smtp.gmail.com', SMTP_USER: 'hiring@gmail.com', SMTP_PASSWORD: 'abcd efgh ijkl mnop' };
+
+  it('takes host, user and app password separately, drops the spaces Gmail shows, and sends from the account', () => {
+    const config = loadConfig(gmail);
+    expect(config.SMTP_PASSWORD).toBe('abcdefghijklmnop');
+    expect(config.MAIL_FROM).toBe('RMS <hiring@gmail.com>');
+    expect(smtpTransportOptions(config)).toEqual({
+      host: 'smtp.gmail.com', port: 465, secure: true, requireTLS: false, auth: { user: 'hiring@gmail.com', pass: 'abcdefghijklmnop' },
+    });
+    expect(loadConfig({ ...gmail, MAIL_FROM: 'Acme Hiring <hiring@gmail.com>' }).MAIL_FROM).toBe('Acme Hiring <hiring@gmail.com>');
+  });
+
+  it('on port 587 upgrades with STARTTLS and refuses to send the password without TLS', () => {
+    expect(smtpTransportOptions(loadConfig({ ...gmail, SMTP_PORT: '587' }))).toMatchObject({ port: 587, secure: false, requireTLS: true });
+  });
+
+  it('still accepts SMTP_URL, and needs host, user and password together otherwise', () => {
+    expect(smtpTransportOptions(loadConfig({ ...base, MAIL_DRIVER: 'smtp', SMTP_URL: 'smtps://u:p@h:465', MAIL_FROM: 'a@b.test' }))).toBe('smtps://u:p@h:465');
+    expect(() => loadConfig({ ...base, MAIL_DRIVER: 'smtp', SMTP_URL: 'smtps://u:p@h:465' })).toThrow(/MAIL_FROM/);
+    const { SMTP_PASSWORD: _, ...noPassword } = gmail;
+    expect(() => loadConfig(noPassword)).toThrow(/SMTP_PASSWORD/);
+    expect(() => loadConfig({ ...gmail, NODE_ENV: 'production' })).not.toThrow(/SMTP|MAIL/);
   });
 });

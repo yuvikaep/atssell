@@ -14,9 +14,9 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      TEST_DATABASE_URL: postgres://jm_app@localhost:5433/jobsmato_test
+      TEST_DATABASE_URL: postgres://jm_app:jm_app_ci@localhost:5433/jobsmato_test
       TEST_DATABASE_URL_ADMIN: postgres://postgres:postgres@localhost:5433/jobsmato_test
-      DATABASE_URL: postgres://jm_app@localhost:5433/jobsmato_test
+      DATABASE_URL: postgres://jm_app:jm_app_ci@localhost:5433/jobsmato_test
       DATABASE_URL_ADMIN: postgres://postgres:postgres@localhost:5433/jobsmato_test
       APP_DB_ROLE: jm_app
       WEB_ORIGIN: http://localhost:5180
@@ -29,7 +29,7 @@ jobs:
       - run: npm ci
       - name: Create the app database role and test database
         run: |
-          PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -c "CREATE ROLE jm_app LOGIN NOBYPASSRLS"
+          PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -c "CREATE ROLE jm_app LOGIN NOBYPASSRLS PASSWORD 'jm_app_ci'"
           PGPASSWORD=postgres psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE jobsmato_test"
       - run: npm run typecheck
       - run: npm test

@@ -127,10 +127,11 @@ export async function buildExport(tx: Tx, p: Principal, type: ExportType, fields
 
 /** Rebuilds a Principal for a user inside the worker (there is no session). Null if the user is gone. */
 export async function principalForUser(tx: Tx, tenantId: string, userId: string): Promise<Principal | null> {
-  const u = await tx.selectFrom('users').select(['id', 'email', 'full_name', 'status']).where('id', '=', userId).executeTakeFirst();
-  if (!u || u.status !== 'active') return null;
+  const u = await tx.selectFrom('users').select(['id', 'email', 'full_name', 'status', 'must_change_password']).where('id', '=', userId).executeTakeFirst();
+  // Someone who has not yet replaced an admin-chosen password could not have asked for this export.
+  if (!u || u.status !== 'active' || u.must_change_password) return null;
   const { roles, permissions } = await loadRolesAndPermissions(tx, userId);
   const t = await tx.selectFrom('tenants').select(['name', 'slug']).where('id', '=', tenantId).executeTakeFirstOrThrow();
-  return { userId, tenantId, tenantName: t.name, tenantSlug: t.slug, email: u.email, fullName: u.full_name, sessionId: 'worker', roles, permissions };
+  return { userId, tenantId, tenantName: t.name, tenantSlug: t.slug, email: u.email, fullName: u.full_name, sessionId: 'worker', mustChangePassword: false, roles, permissions };
 }
 

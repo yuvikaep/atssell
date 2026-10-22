@@ -29,7 +29,8 @@ export async function createInvitedUser(tx: Tx, req: FastifyRequest, inv: OpenIn
 
   const user = await tx
     .insertInto('users')
-    .values({ tenant_id: inv.tenant_id, email: inv.email, full_name: fullName, password_hash: passwordHash, ...(byUserId ? {} : { last_login_at: sql`now()` }) })
+    // byUserId: an admin chose this password, so the person must replace it at first sign-in.
+    .values({ tenant_id: inv.tenant_id, email: inv.email, full_name: fullName, password_hash: passwordHash, ...(byUserId ? { must_change_password: true } : { last_login_at: sql`now()` }) })
     .returning('id')
     .executeTakeFirstOrThrow();
   await tx

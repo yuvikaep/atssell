@@ -110,7 +110,7 @@ export async function employmentRoutes(app: FastifyInstance) {
     const { id } = idParams.parse(req.params);
     const body = OfferBody.parse(req.body);
     const status = body.status === 'offered' ? 'released' : body.status;
-    return withTenant(db, p.tenantId, async (tx) => {
+    const data = await withTenant(db, p.tenantId, async (tx) => {
       const a = await tx.selectFrom('applications').select(['id', 'status', 'stage_id']).where('id', '=', id).forUpdate().executeTakeFirst();
       if (!a) throw notFound('Application');
       if (a.status !== 'active') throw new AppError(409, 'APPLICATION_CLOSED', 'Offers can only be recorded for candidates still in the pipeline.');
@@ -129,8 +129,9 @@ export async function employmentRoutes(app: FastifyInstance) {
         try { await moveStage(tx, req, p, a, offerStage.id); } catch (err) { if (!(err instanceof AppError) || err.code !== 'TRANSITION_NOT_ALLOWED') throw err; }
       }
       await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'offer.recorded', entityType: 'offer', entityId: offerId, metadata: { application_id: id, status: body.status, offered_ctc: body.offered_ctc } });
-      return reply.status(201).send({ data: { id: offerId, status: body.status, offered_ctc: body.offered_ctc } });
+      return { id: offerId, status: body.status, offered_ctc: body.offered_ctc };
     });
+    return reply.status(201).send({ data });
   });
 
   app.get('/employment', async (req) => {

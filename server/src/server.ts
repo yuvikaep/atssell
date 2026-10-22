@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { loadConfig, type Config } from './config.js';
-import { createDb } from './db.js';
+import { assertRlsEnforced, createDb, RlsBypassError } from './db.js';
+import { postgresRateLimitStore } from './rate-limit-store.js';
 import { misconfiguredApp } from './misconfigured.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,10 +21,20 @@ else await serveMisconfigured(configError);
 
 async function start(config: Config) {
   const db = createDb(config.DATABASE_URL, config.DB_POOL_MAX);
-  // Production refuses local disk, the dev scanner and the console mailer (see loadConfig).
+  try {
+    await assertRlsEnforced(db);
+  } catch (err) {
+    if (!(err instanceof RlsBypassError)) throw err;
+    await db.destroy();
+    return serveMisconfigured(err);
+  }
+  // Production refuses the dev scanner, the console mailer and (unless ALLOW_LOCAL_STORAGE) local disk; see loadConfig.
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
   const storage = createStorage(config, root);
-  const app = await buildApp({ config, db, mailer: createMailer(config), storage, scanner: createScanner(config) });
+  const app = await buildApp({
+    config, db, mailer: createMailer(config), storage, scanner: createScanner(config),
+    rateLimitStore: postgresRateLimitStore(db, config.IP_HASH_SALT),
+  });
 
   // Vercel instances may pause between requests. Schedule worker-cli separately there.
   const stopWorker = process.env.VERCEL === '1'

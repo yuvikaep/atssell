@@ -386,7 +386,7 @@ export async function feedbackRoutes(app: FastifyInstance) {
     const p = principal(req);
     const { id } = idParams.parse(req.params);
     const body = CorrectionBody.parse(req.body);
-    return withTenant(db, p.tenantId, async (tx) => {
+    const data = await withTenant(db, p.tenantId, async (tx) => {
       const fb = await tx
         .selectFrom('feedback as f')
         .innerJoin('interviews as i', 'i.id', 'f.interview_id')
@@ -415,8 +415,9 @@ export async function feedbackRoutes(app: FastifyInstance) {
       await recordInterviewEvent(tx, { tenantId: p.tenantId, interviewId: fb.interview_id, type: 'feedback_corrected', reason: body.reason, actorUserId: p.userId, metadata: { feedback_id: id, version: correction.version } });
       await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'feedback.corrected', entityType: 'feedback', entityId: id, metadata: { correction_id: correction.id, version: correction.version, reason: body.reason } });
       const [row] = await feedbackFor(tx, [fb.interview_id]).then((all) => all.filter((f) => f.id === id));
-      return reply.status(201).send({ data: row });
+      return row;
     });
+    return reply.status(201).send({ data });
   });
 
   // Candidates by their latest decision (selected, on hold, rejected, sent to another round), with the
@@ -447,7 +448,7 @@ export async function feedbackRoutes(app: FastifyInstance) {
     const p = principal(req);
     const { id } = idParams.parse(req.params);
     const body = DecisionBody.parse(req.body);
-    return withTenant(db, p.tenantId, async (tx) => {
+    const data = await withTenant(db, p.tenantId, async (tx) => {
       const appBase = () => tx.selectFrom('applications as a').innerJoin('vacancies as v', 'v.id', 'a.vacancy_id').innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id').select(['a.id', 'a.status', 'rq.department_id']).where('a.id', '=', id);
       // An interviewer of this candidate decides directly; otherwise the decision permission is needed.
       const interviewed = await interviewedApplication(tx, p.userId, id);
@@ -458,8 +459,9 @@ export async function feedbackRoutes(app: FastifyInstance) {
       if (['reject', 'hold'].includes(body.decision) && !body.reason) throw new AppError(400, 'VALIDATION_ERROR', 'Some fields are invalid.', [{ path: 'reason', message: 'Give a reason for this decision.' }]);
       const row = await tx.insertInto('hiring_decisions').values({ tenant_id: p.tenantId, application_id: id, decision: body.decision, reason: body.reason ?? null, decided_by: p.userId }).returning(['id', 'decision', 'reason', 'decided_at']).executeTakeFirstOrThrow();
       await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'application.decision_recorded', entityType: 'application', entityId: id, metadata: { decision: body.decision, reason: body.reason ?? null } });
-      return reply.status(201).send({ data: row });
+      return row;
     });
+    return reply.status(201).send({ data });
   });
 
   app.get('/applications/:id/decisions', async (req) => {

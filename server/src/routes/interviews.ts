@@ -615,15 +615,16 @@ export async function interviewRoutes(app: FastifyInstance) {
     const p = principal(req);
     const { id } = idParams.parse(req.params);
     const member = PanelMember.parse(req.body);
-    return withTenant(db, p.tenantId, async (tx) => {
+    const data = await withTenant(db, p.tenantId, async (tx) => {
       const iv = await loadInterview(tx, p, id, { lock: true });
       requirePermission(p, 'interviews.manage', iv.department_id);
       if (['cancelled', 'no_show'].includes(iv.status)) throw new AppError(409, 'INVALID_STATE', 'This interview is no longer happening.');
       const m = await addPanelist(tx, p.tenantId, id, member);
       await recordInterviewEvent(tx, { tenantId: p.tenantId, interviewId: id, type: 'panel_added', actorUserId: p.userId, metadata: { interviewer_id: m.id } });
       await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'interview.panel_added', entityType: 'interview', entityId: id, metadata: { interviewer_id: m.id } });
-      return reply.status(201).send({ data: await interviewDetail(tx, p, id) });
+      return interviewDetail(tx, p, id);
     });
+    return reply.status(201).send({ data });
   });
 
   app.delete('/interviews/:id/interviewers/:interviewerId', async (req) => {

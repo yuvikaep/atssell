@@ -35,6 +35,7 @@ export interface UsersTable {
   status: Generated<RecordStatus>;
   auth_subject: string | null;
   password_hash: string | null;
+  must_change_password: Generated<boolean>;
   last_login_at: NullableTimestamp;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
