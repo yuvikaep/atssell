@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
 import { CreateLoginDialog } from '../components/CreateLoginDialog';
+import { CreateUserDialog } from '../components/CreateUserDialog';
 import { api, ApiError, can } from '../api';
 import { useMe } from '../components/AppShell';
 import { Badge, Dialog, EmptyState, ErrorState, Field, fieldError, Forbidden, FormError, formatDate, Loading, StatusBadge, InviteLinkNotice } from '../components/ui';
@@ -18,6 +19,7 @@ export function AgencyDetailPage() {
   const queryClient = useQueryClient();
   const [inviting, setInviting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [addingMember, setAddingMember] = useState(false);
   const [creatingLogin, setCreatingLogin] = useState<{ id: string; email: string } | null>(null);
   const [inviteLink, setInviteLink] = useState<{ link?: string | null; email: string } | null>(null);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['agency-members', id] });
@@ -49,12 +51,18 @@ export function AgencyDetailPage() {
           <div className="title-row"><h1>{agency.name}</h1><StatusBadge status={agency.status} /></div>
           <p>People at this agency who can sign in to the agency portal.</p>
         </div>
-        {agency.status === 'active' && <button className="btn btn-primary" onClick={() => { setNotice(null); setInviting(true); }}>Invite member</button>}
+        {agency.status === 'active' && (
+          <div className="actions-row">
+            <button className="btn btn-primary" onClick={() => { setNotice(null); setAddingMember(true); }}>Add member</button>
+            <button className="btn" onClick={() => { setNotice(null); setInviting(true); }}>Invite by link</button>
+          </div>
+        )}
       </div>
 
       {(update.error || inviteAction.error) && <FormError error={update.error ?? inviteAction.error} />}
       {notice && <div className="alert alert-success" role="status">{notice}</div>}
       <InviteLinkNotice link={inviteLink?.link} email={inviteLink?.email} />
+      {addingMember && <CreateUserDialog agency={{ id: agency.id, name: agency.name }} onClose={() => { setAddingMember(false); refresh(); }} />}
       {creatingLogin && <CreateLoginDialog invitation={creatingLogin} onClose={() => setCreatingLogin(null)} />}
 
       <TermsPanel agencyId={agency.id} />

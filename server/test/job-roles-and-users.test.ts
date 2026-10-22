@@ -62,6 +62,10 @@ describe('creating users directly', () => {
     const login = await signIn('agent@jr.test', 'first-password-123');
     const me = (await call(ctx, `jm_session=${login.cookies.find((c) => c.name === 'jm_session')!.value}`, 'GET', '/me')).json().data;
     expect(me.permissions['agency_portal.use']).toBeTruthy();
+    // Team & roles lists company staff only.
+    const staff = (await call(ctx, admin, 'GET', '/users?page_size=100')).json().data.map((u: { email: string }) => u.email);
+    expect(staff).not.toContain('agent@jr.test');
+    expect(staff).toContain('rita@jr.test');
   });
 
   it('is only for admins', async () => {

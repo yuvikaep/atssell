@@ -61,8 +61,10 @@ describe('inviting agency members', () => {
 
   it('resending keeps the agency, so the new link still joins that agency', async () => {
     await invite(admin, 'resend.me@agency.test', 'recruiter');
-    const pending = (await call(ctx, admin, 'GET', '/users/invitations')).json().data.find((i: { email: string }) => i.email === 'resend.me@agency.test');
-    expect(pending.agency_name).toBe('Members Staffing');
+    // Agency invitations live on the agency's page, not in Team & roles.
+    expect((await call(ctx, admin, 'GET', '/users/invitations')).json().data.some((i: { email: string }) => i.email === 'resend.me@agency.test')).toBe(false);
+    const pending = (await call(ctx, admin, 'GET', `/agencies/${agency}/members`)).json().data.invitations.find((i: { email: string }) => i.email === 'resend.me@agency.test');
+    expect(pending).toBeTruthy();
     expect((await call(ctx, admin, 'POST', `/users/invitations/${pending.id}/resend`)).statusCode).toBe(201);
     const token = ctx.mailer.invitations.at(-1)!.link.split('#')[1]!;
     const accept = await ctx.app.inject({ method: 'POST', url: '/api/v1/invitations/accept', remoteAddress: nextIp(), payload: { token, full_name: 'Resent Person', password: 'agency-member-password' } });

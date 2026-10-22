@@ -156,7 +156,8 @@ export async function userRoutes(app: FastifyInstance) {
     const { page, page_size, status, q } = ListQuery.parse(req.query);
 
     return withTenant(db, p.tenantId, async (tx) => {
-      let base = tx.selectFrom('users');
+      // Company staff only: agency people are managed from their agency's page.
+      let base = tx.selectFrom('users').where((eb) => eb.not(eb.exists(eb.selectFrom('agency_members as am').select('am.user_id').whereRef('am.user_id', '=', 'users.id'))));
       if (status !== 'all') base = base.where('status', '=', status);
       if (q) {
         const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -285,6 +286,7 @@ export async function userRoutes(app: FastifyInstance) {
         ])
         .where('i.accepted_at', 'is', null)
         .where('i.revoked_at', 'is', null)
+        .where('i.agency_id', 'is', null) // agency invitations are listed on the agency's page
         .orderBy('i.created_at', 'desc')
         .execute(),
     );
