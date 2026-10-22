@@ -6,7 +6,7 @@ import { api, can, isRecruiter, type Me } from '../api';
 import { meQuery, unreadCountQuery } from '../queries';
 
 interface NavItem {
-  to: '/' | '/departments' | '/users' | '/requisitions' | '/vacancies' | '/candidates' | '/pipeline' | '/agencies' | '/portal' | '/portal/submissions' | '/interviews' | '/my-interviews' | '/reports' | '/offers' | '/decisions' | '/sourcing' | '/status' | '/employees' | '/leaderboards' | '/terms' | '/team' | '/salary-joining';
+  to: '/' | '/departments' | '/users' | '/requisitions' | '/vacancies' | '/candidates' | '/pipeline' | '/agencies' | '/portal' | '/portal/submissions' | '/interviews' | '/my-interviews' | '/reports' | '/offers' | '/decisions' | '/sourcing' | '/status' | '/employees' | '/leaderboards' | '/terms' | '/team' | '/salary-joining' | '/setup';
   label: string;
   icon: IconName;
   visible: (me: Me) => boolean;
@@ -29,6 +29,7 @@ const HR_NAV: NavItem[] = [
   { to: '/reports', label: 'Reports', icon: 'chart', visible: () => true },
   { to: '/departments', label: 'Departments', icon: 'org', visible: (me) => can(me, 'departments.manage') || can(me, 'vacancies.view_all') },
   { to: '/users', label: 'Team & roles', icon: 'shield', visible: () => true },
+  { to: '/setup', label: 'Company setup', icon: 'plus', visible: () => true },
 ];
 const AGENCY_NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: 'home', visible: () => true },

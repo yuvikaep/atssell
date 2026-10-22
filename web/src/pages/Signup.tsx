@@ -18,7 +18,7 @@ export function SignupPage() {
     mutationFn: () => api('POST', '/auth/signup', { company_name: companyName, full_name: fullName, email, password }),
     onSuccess: async () => {
       queryClient.clear();
-      await navigate({ to: '/' });
+      await navigate({ to: '/setup' });
     },
   });
 

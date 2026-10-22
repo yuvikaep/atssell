@@ -616,3 +616,12 @@ input[type='checkbox'], input[type='radio'] {
   .hbars-grid { left: calc(16px + 106px); }
   .cols-labels span { font-size: 10.5px; }
 }
+
+.onboard-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .onboard-grid { grid-template-columns: 1fr; } }
+.onboard-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.onboard-list li { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); font-size: 13px; }
+.step-btn { all: unset; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.steps li[data-active='true'] { background: var(--accent-soft); color: var(--accent); }
+.steps li[data-done='true'] { color: var(--text-2); }
+.setup-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; border-color: var(--accent); background: var(--accent-soft); }

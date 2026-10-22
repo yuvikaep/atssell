@@ -40,8 +40,16 @@ export function HrDashboard({ name }: { name: string }) {
 
 function Body({ d }: { d: Dash }) {
   const t = d.totals;
+  // A new company without jobs yet is pointed to the short setup.
+  const needsSetup = d.jobs.length === 0 && t.open_jobs === 0 && t.pipeline === 0;
   return (
     <>
+      {needsSetup && (
+        <div className="card section setup-banner">
+          <div><h2 style={{ margin: 0 }}>Finish setting up</h2><p className="muted" style={{ margin: '4px 0 0' }}>Add departments, jobs, recruiters and agencies in four quick steps.</p></div>
+          <Link className="btn btn-primary" to="/setup">Start setup</Link>
+        </div>
+      )}
       <div className="stats">
         <Stat label="Open jobs" value={t.open_jobs} hint={t.on_hold_jobs ? `${t.on_hold_jobs} on hold` : undefined} />
         <Stat label="Candidates in pipeline" value={t.pipeline} />
