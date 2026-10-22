@@ -1,0 +1,32 @@
+name: Deploy
+
+# Deploys main to the JobsMato server (rms.jobsmato.com) after CI passes, on the self-hosted runner
+# labelled "rms" that runs on that server. See docs/DEPLOY-SERVER.md.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; a newer push waits for the running deploy instead of cutting it off.
+concurrency:
+  group: deploy-rms-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Only a successful CI run for a push to main in this repository (never a pull request or a fork).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: [self-hosted, rms]
+    timeout-minutes: 30
+    steps:
+      - name: Deploy to the server
+        env:
+          # The commit CI tested; a manual run deploys the latest main.
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: bash /home/jobsmato/rms/app/deploy/server/deploy.sh

@@ -15,6 +15,7 @@ Browser ─HTTPS─> Cloudflare ─"rms" tunnel─> rms_tunnel ─> rms_web (ngi
 | Port | `127.0.0.1:5010` → `rms_web`, for checks on the server; nothing else is published |
 | Data | Docker volumes `rms_pgdata` (database) and `rms_files` (resumes, exports) |
 | Backups | `deploy/server/backups/`, nightly at 02:30 by cron, 14 days kept |
+| Deploys | Automatic after CI passes on `main` (GitHub Actions, self-hosted runner `rms`) |
 
 Connect to the server as described in the JobsMato backend's `docs/MULTI-DOMAIN-BACKEND-SETUP.md`
 (Cloudflare `access tcp` to `ssh.jobsmato.com`, then `ssh -p 2222 jobsmato@localhost`).
@@ -23,7 +24,7 @@ Connect to the server as described in the JobsMato backend's `docs/MULTI-DOMAIN-
 
 ```bash
 mkdir -p /home/jobsmato/rms && cd /home/jobsmato/rms
-git clone --branch deploy-rms https://github.com/yuvikaep/atssell.git app
+git clone --branch main https://github.com/yuvikaep/atssell.git app
 cd app/deploy/server
 
 # Secrets: fresh random values, never reused from anywhere else.
@@ -84,14 +85,30 @@ chmod +x backup.sh
 
 Restore a dump into the running database: `docker exec -i rms_postgres pg_restore -U rms_owner -d rms --clean --if-exists < backups/<stamp>/database.dump`.
 
-## Updating
+## Updating: automatic on push to main
 
-```bash
-cd /home/jobsmato/rms/app && git pull
-cd deploy/server && docker compose build && docker compose up -d
-```
+A push to `main` runs **CI** on GitHub. When CI passes, the **Deploy** workflow (`.github/workflows/deploy.yml`) runs on
+the self-hosted runner `rms` on this server, which runs `deploy/server/deploy.sh` for the commit CI tested:
 
-`up` runs the migrations first; the API starts only if they succeed.
+1. checks out that commit (refusing anything not on `main`); `.env`, `api.env`, `tunnel/` and `backups/` are kept;
+2. builds new images while the live site keeps running (a failed build changes nothing);
+3. `docker compose up -d`: migrations first, then the API and web are replaced;
+4. waits up to 90 s for `/health`; if it never comes up, the previous images and commit are put back.
+
+Progress and logs are in the repository's **Actions** tab; GitHub emails you when a deploy fails.
+To redeploy by hand: Actions → Deploy → **Run workflow**, or on the server `bash /home/jobsmato/rms/app/deploy/server/deploy.sh`.
+
+A rollback restores the code but not the database: a migration that already ran stays applied.
+
+### The runner
+
+The runner lives in `/home/jobsmato/actions-runner-rms` and runs as the `actions.runner.*` systemd service, like the
+other repositories' runners on this server. It only takes jobs labelled `rms`.
+
+**The repository is public.** Pull requests from forks can add their own workflows, and one that asked for the
+`rms` runner would run its code on this server. In GitHub → Settings → Actions → General, set
+**"Require approval for all external contributors"** (or make the repository private) so no outside workflow runs
+without your approval.
 
 ## Checking
 
