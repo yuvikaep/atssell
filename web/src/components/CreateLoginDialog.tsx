@@ -26,7 +26,7 @@ export function CreateLoginDialog({ invitation, onClose }: { invitation: { id: s
   const submit = (e: FormEvent) => { e.preventDefault(); create.mutate(); };
 
   if (create.data) {
-    const details = `Login: ${window.location.origin}/login\nCompany code: ${create.data.data.company}\nEmail: ${invitation.email}\nPassword: ${password}\n(Change your password after signing in.)`;
+    const details = `Login: ${window.location.origin}/login\nEmail: ${invitation.email}\nPassword: ${password}\n(Change your password after signing in.)`;
     return (
       <Dialog open title="Login created" onClose={onClose}
         footer={<button className="btn btn-primary" type="button" onClick={onClose}>Done</button>}>

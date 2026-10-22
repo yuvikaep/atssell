@@ -45,7 +45,7 @@ export function CreateUserDialog({ onClose, agency }: { onClose: () => void; age
   const roleName = roles.data?.find((r) => r.code === roleCode)?.name ?? roleCode;
 
   if (create.data) {
-    const details = `Login: ${window.location.origin}/login\nCompany code: ${create.data.data.company}\nEmail: ${email}\nPassword: ${password}\nRole: ${roleName}\n(Change your password after signing in.)`;
+    const details = `Login: ${window.location.origin}/login\nEmail: ${email}\nPassword: ${password}\nRole: ${roleName}\n(Change your password after signing in.)`;
     return (
       <Dialog open title="User created" onClose={onClose} footer={<button className="btn btn-primary" type="button" onClick={onClose}>Done</button>}>
         <p>{fullName} can sign in now as <strong>{roleName}</strong>. Send them these details privately.</p>

@@ -78,7 +78,7 @@ export function DashboardPage() {
       <div className="page-header">
         <div>
           <h1>Welcome back, {firstName}</h1>
-          <p>{me.tenant.name} · company code <strong>{me.tenant.slug}</strong></p>
+          <p>{me.tenant.name}</p>
         </div>
         <div className="actions-row">
           {can(me, 'requisitions.create') && <Link className="btn btn-primary" to="/requisitions"><Icon name="plus" size={16} />New hiring request</Link>}

@@ -80,10 +80,12 @@ export async function agencyTermsRoutes(app: FastifyInstance) {
   });
 
   // ---- The agency's own view: its terms, read-only ----
+  // Commercial terms are for the agency admin only, not its sub-recruiters.
   app.get('/agency/terms', async (req) => {
     const p = principal(req);
     return withTenant(db, p.tenantId, async (tx) => {
       const a = await agencyOf(tx, p);
+      if (a.agency_role !== 'admin') throw forbidden();
       return { data: { agency: a.name, current: await termsEffectiveOn(tx, a.agency_id, today()), history: await history(tx, a.agency_id), example_fee: null as number | null } };
     });
   });

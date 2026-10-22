@@ -208,3 +208,21 @@ describe('company signup', () => {
     expect((await loginReq({ company: company.slug, email: body.email, password: PASSWORD })).statusCode).toBe(401);
   });
 });
+
+describe('sign in without the company code', () => {
+  it('finds the company from email and password, and asks only when two companies match', async () => {
+    const bare = (payload: object) => ctx.app.inject({ method: 'POST', url: '/api/v1/auth/login', remoteAddress: nextIp(), payload });
+    expect((await bare({ email: company.admin.email, password: PASSWORD })).statusCode).toBe(200);
+    expect((await bare({ email: company.admin.email, password: 'wrong-password-xx' })).json().error.code).toBe('INVALID_CREDENTIALS');
+    expect((await bare({ email: 'nobody@nowhere.test', password: PASSWORD })).json().error.code).toBe('INVALID_CREDENTIALS');
+
+    // The same person in a second company with the same password: choose.
+    const other = await createCompany(ctx, 'auth2');
+    await addUser(ctx, other.tenant.id, { email: company.admin.email, role: 'internal_recruiter' });
+    const both = await bare({ email: company.admin.email, password: PASSWORD });
+    expect(both.statusCode).toBe(409);
+    expect(both.json().error.code).toBe('CHOOSE_COMPANY');
+    expect(both.json().error.details.map((d: { slug: string }) => d.slug).sort()).toEqual([company.slug, other.slug].sort());
+    expect((await bare({ company: other.slug, email: company.admin.email, password: PASSWORD })).statusCode).toBe(200);
+  });
+});

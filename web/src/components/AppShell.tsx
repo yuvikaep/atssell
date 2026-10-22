@@ -33,7 +33,7 @@ const AGENCY_NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: 'home', visible: () => true },
   { to: '/portal', label: 'Open jobs', icon: 'jobs', visible: () => true },
   { to: '/portal/submissions', label: 'My submissions', icon: 'people', visible: () => true },
-  { to: '/terms', label: 'Commercial terms', icon: 'offer', visible: () => true },
+  { to: '/terms', label: 'Commercial terms', icon: 'offer', visible: (me) => me.roles.some((r) => r.code === 'agency_admin') },
   { to: '/team', label: 'My team', icon: 'shield', visible: (me) => me.roles.some((r) => r.code === 'agency_admin') },
 ];
 const INTERVIEWER_NAV: NavItem[] = [{ to: '/my-interviews', label: 'My interviews', icon: 'chat', visible: () => true }];
@@ -144,7 +144,7 @@ export function AppShell() {
             </div>
           );
         })}
-        <div className="sidebar-foot"><span className="company-dot" aria-hidden>{me.tenant.name[0]}</span><div><strong>{me.tenant.name}</strong><span>Company code {me.tenant.slug}</span></div></div>
+        <div className="sidebar-foot"><span className="company-dot" aria-hidden>{me.tenant.name[0]}</span><div><strong>{me.tenant.name}</strong></div></div>
       </nav>
       <div className="scrim" onClick={() => setDrawer(false)} aria-hidden />
       <header className="topbar">

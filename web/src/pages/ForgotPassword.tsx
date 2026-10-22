@@ -6,9 +6,8 @@ import { Field, FormError } from '../components/ui';
 import { AuthLayout } from './AuthLayout';
 
 export function ForgotPasswordPage() {
-  const [company, setCompany] = useState('');
   const [email, setEmail] = useState('');
-  const request = useMutation({ mutationFn: () => api('POST', '/auth/password-reset/request', { company, email }) });
+  const request = useMutation({ mutationFn: () => api('POST', '/auth/password-reset/request', { email }) });
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -28,13 +27,10 @@ export function ForgotPasswordPage() {
     <AuthLayout title="Reset your password" subtitle="We'll email you a link to choose a new password.">
       <form onSubmit={submit} noValidate>
         <FormError error={request.error} />
-        <Field id="company" label="Company code">
-          <input id="company" value={company} onChange={(e) => setCompany(e.target.value)} autoCapitalize="none" required />
-        </Field>
         <Field id="email" label="Work email">
           <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required />
         </Field>
-        <button className="btn btn-primary btn-block" type="submit" disabled={request.isPending || !company || !email}>
+        <button className="btn btn-primary btn-block" type="submit" disabled={request.isPending || !email}>
           Send reset link
         </button>
       </form>
