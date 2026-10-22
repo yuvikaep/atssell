@@ -4,7 +4,7 @@ import { api } from '../api';
 import { Dialog, Field, fieldError, FormError } from './ui';
 
 /** A readable 14-character first password (no look-alike characters). */
-function generatePassword() {
+export function generatePassword() {
   const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const bytes = crypto.getRandomValues(new Uint8Array(14));
   return Array.from(bytes, (b) => chars[b % chars.length]).join('');
@@ -26,7 +26,7 @@ export function CreateLoginDialog({ invitation, onClose }: { invitation: { id: s
   const submit = (e: FormEvent) => { e.preventDefault(); create.mutate(); };
 
   if (create.data) {
-    const details = `Login: ${window.location.origin}/login\nCompany code: ${create.data.data.company}\nEmail: ${invitation.email}\nPassword: ${password}\n(Change your password after signing in.)`;
+    const details = `Login: ${window.location.origin}/login\nEmail: ${invitation.email}\nPassword: ${password}\n(Change your password after signing in.)`;
     return (
       <Dialog open title="Login created" onClose={onClose}
         footer={<button className="btn btn-primary" type="button" onClick={onClose}>Done</button>}>

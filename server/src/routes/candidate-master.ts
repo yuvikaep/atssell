@@ -3,6 +3,7 @@
 import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { z } from 'zod';
+import { SIMPLE_STATUSES, simpleStatusSql } from '../simple-status.js';
 import { agencyIdOf, candidateVisible, hasAny, vacancyVisible } from '../access.js';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
@@ -20,9 +21,13 @@ const ListQuery = pageQuery.extend({
   q: z.string().trim().max(200).optional(),
   city: z.string().trim().max(100).optional(),
   stage: z.string().trim().max(40).optional(),
+  status: z.enum(SIMPLE_STATUSES).optional(),
   vacancy_id: z.uuid().optional(),
   source: z.enum(['agency', 'internal']).optional(),
   agency_id: z.uuid().optional(),
+  // Comma-separated: the sourcing recruiters or agencies to include.
+  recruiter_ids: z.string().max(4000).optional().transform((v) => (v ? v.split(',').filter(Boolean) : [])).pipe(z.array(z.uuid())),
+  agency_ids: z.string().max(4000).optional().transform((v) => (v ? v.split(',').filter(Boolean) : [])).pipe(z.array(z.uuid())),
   min_experience: z.coerce.number().min(0).optional(),
   sort: z.enum(['name', 'city', 'experience', 'notice', 'added', 'job', 'status']).default('added'),
   dir: z.enum(['asc', 'desc']).default('desc'),
@@ -89,7 +94,7 @@ export async function candidateMasterRoutes(app: FastifyInstance) {
             .leftJoin('submissions as sb', (j) => j.onRef('sb.application_id', '=', 'a.id').on('sb.ownership_state', '=', 'accepted'))
             .leftJoin('agencies as ag', 'ag.id', 'sb.agency_id')
             .leftJoin('users as su', 'su.id', 'sb.source_user_id')
-            .select(['a.id as application_id', 'a.status as app_status', 'v.id as vacancy_id', 'v.title as job_title', 'v.vacancy_code', 'st.code as stage_code', 'st.name as stage_name', 'st.sort_order as stage_sort', 'ag.name as agency_name', 'su.full_name as recruiter_name', 'sb.agency_id as owner_agency_id'])
+            .select([simpleStatusSql('a').as('simple_status'), 'a.id as application_id', 'a.sourcing_code', 'a.temp_employee_code', 'a.status as app_status', 'v.id as vacancy_id', 'v.title as job_title', 'v.vacancy_code', 'st.code as stage_code', 'st.name as stage_name', 'st.sort_order as stage_sort', 'ag.name as agency_name', 'su.full_name as recruiter_name', 'sb.agency_id as owner_agency_id', 'sb.source_user_id as owner_user_id'])
             .whereRef('a.candidate_id', '=', 'c.id')
             .$if(!!f.vacancy_id, (q) => q.where('a.vacancy_id', '=', f.vacancy_id!))
             .where(vacancyVisible(p, null))
@@ -105,23 +110,28 @@ export async function candidateMasterRoutes(app: FastifyInstance) {
         const phone = contact ? normalizePhone(f.q) : null;
         base = base.where((eb) => eb.or([
           eb('c.full_name', 'ilike', like), eb('c.current_title', 'ilike', like), eb('c.city', 'ilike', like),
+          // A sourcing ID (SRC-…) or temp employee ID (TEMP-…) on any of the candidate's applications.
+          sql<boolean>`EXISTS (SELECT 1 FROM applications ax WHERE ax.candidate_id = c.id AND (ax.sourcing_code ILIKE ${like} OR ax.temp_employee_code ILIKE ${like}))`,
           sql<boolean>`EXISTS (SELECT 1 FROM unnest(c.skills) sk WHERE sk ILIKE ${like})`,
           ...(contact ? [eb('c.email', 'ilike', like)] : []), ...(phone ? [eb('c.phone', '=', phone)] : []),
         ]));
       }
       if (f.city) base = base.where(sql`lower(c.city)`, '=', f.city.toLowerCase());
       if (f.stage) base = base.where('la.stage_code', '=', f.stage);
+      if (f.status) base = base.where('la.simple_status', '=', f.status);
       if (f.vacancy_id) base = base.where('la.vacancy_id', 'is not', null);
       if (f.source === 'agency') base = base.where('la.owner_agency_id', 'is not', null);
       if (f.source === 'internal') base = base.where('la.application_id', 'is not', null).where('la.owner_agency_id', 'is', null);
       if (f.agency_id) base = base.where('la.owner_agency_id', '=', f.agency_id);
+      if (f.agency_ids.length) base = base.where('la.owner_agency_id', 'in', f.agency_ids);
+      if (f.recruiter_ids.length) base = base.where('la.owner_agency_id', 'is', null).where('la.owner_user_id', 'in', f.recruiter_ids);
       if (f.min_experience !== undefined) base = base.where('c.total_experience_years', '>=', f.min_experience);
 
       const { total } = await base.select(sql<number>`count(*)::int`.as('total')).executeTakeFirstOrThrow();
       const sortExpr = sql.raw(SORTS[f.sort]);
       const rows = await base
         .select(['c.id', 'c.full_name', 'c.email', 'c.phone', 'c.city', 'c.current_title', 'c.total_experience_years', 'c.notice_period_days', 'c.skills', 'c.created_at',
-          'la.application_id', 'la.app_status', 'la.vacancy_id', 'la.job_title', 'la.vacancy_code', 'la.stage_code', 'la.stage_name', 'la.agency_name', 'la.recruiter_name',
+          'la.simple_status', 'la.application_id', 'la.sourcing_code', 'la.temp_employee_code', 'la.app_status', 'la.vacancy_id', 'la.job_title', 'la.vacancy_code', 'la.stage_code', 'la.stage_name', 'la.agency_name', 'la.recruiter_name',
           sql<number>`(SELECT count(*)::int FROM applications x WHERE x.candidate_id = c.id)`.as('applications'),
           sql<string | null>`(SELECT d.decision FROM hiring_decisions d WHERE d.application_id = la.application_id ORDER BY d.decided_at DESC LIMIT 1)`.as('decision'),
           sql<string | null>`(SELECT d.reason FROM hiring_decisions d WHERE d.application_id = la.application_id ORDER BY d.decided_at DESC LIMIT 1)`.as('decision_reason'),

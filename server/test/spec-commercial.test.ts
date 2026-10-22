@@ -92,6 +92,9 @@ describe('agency commercial terms', () => {
     const theirs = (await call(ctx, otherAgency.cookie, 'GET', '/agency/terms')).json().data;
     expect(theirs).toMatchObject({ current: null, history: [] });
     expect((await call(ctx, agency.cookie, 'GET', `/agencies/${other}/terms`)).statusCode).toBe(403);
+    // Sub-recruiters do not see commercials; only the agency admin does.
+    const sub = await addAgencyMember(ctx, hr, agencyId, 'sub@talent.test', 'recruiter');
+    expect((await call(ctx, sub.cookie, 'GET', '/agency/terms')).statusCode).toBe(403);
   });
 });
 

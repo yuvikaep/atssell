@@ -19,20 +19,22 @@ import {
 const companySchema = z.string().trim().toLowerCase().min(2).max(63);
 
 const LoginBody = z.object({
-  company: companySchema,
+  // Optional: only needed when the same email and password belong to more than one company.
+  company: companySchema.optional(),
   email: z.email().trim(),
   password: z.string().min(1).max(256),
 });
 
 const SignupBody = z.object({
   company_name: z.string().trim().min(2, 'Enter the company name.').max(120),
-  company: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9-]{1,62}$/, 'Use 2-63 lowercase letters, numbers or hyphens'),
+  // Internal only (people sign in with email); made from the name when not given.
+  company: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9-]{1,62}$/, 'Use 2-63 lowercase letters, numbers or hyphens').optional(),
   full_name: z.string().trim().min(1, 'Enter your name.').max(120),
   email: z.email('Enter a valid email.').trim().toLowerCase(),
   password: passwordSchema,
 });
 
-const ResetRequestBody = z.object({ company: companySchema, email: z.email().trim() });
+const ResetRequestBody = z.object({ company: companySchema.optional(), email: z.email().trim() });
 const ResetConfirmBody = z.object({ token: tokenSchema, password: passwordSchema });
 
 const invalidCredentials = () =>
@@ -51,9 +53,33 @@ export async function authRoutes(app: FastifyInstance) {
       .executeTakeFirst();
   }
 
+  /**
+   * The company whose account has this email and password. Several matches (one person in two
+   * companies with the same password) ask them to pick; the names are shown only after the password matched.
+   */
+  function accountsForEmail(email: string) {
+    return db.transaction().execute(async (tx) => {
+      await sql`SELECT set_config('app.login_email', ${email}, true)`.execute(tx);
+      return tx.selectFrom('users as u').innerJoin('tenants as t', 't.id', 'u.tenant_id')
+        .select(['u.password_hash', 't.slug', 't.name']).where('u.email', '=', email).where('t.status', '=', 'active').execute();
+    });
+  }
+  const companiesForEmail = async (email: string) => (await accountsForEmail(email)).map((a) => a.slug);
+
+  async function companyForEmail(email: string, password: string) {
+    const accounts = await accountsForEmail(email);
+    const matched: { slug: string; name: string }[] = [];
+    for (const a of accounts) if (a.password_hash && (await verifyPassword(password, a.password_hash))) matched.push({ slug: a.slug, name: a.name });
+    if (accounts.length === 0) await verifyPassword(password, await getDummyHash());
+    if (matched.length > 1) throw new AppError(409, 'CHOOSE_COMPANY', 'This email is used in more than one company. Choose the company.', matched);
+    // No match: fall through to the usual generic error (an unknown code behaves like a wrong password).
+    return matched[0]?.slug ?? accounts[0]?.slug ?? '-';
+  }
+
   app.post('/auth/login', { config: publicRateLimit(10) }, async (req, reply) => {
     const body = LoginBody.parse(req.body);
-    const tenant = await findActiveTenant(body.company);
+    const company = body.company ?? (await companyForEmail(body.email, body.password));
+    const tenant = await findActiveTenant(company);
     if (!tenant) {
       await verifyPassword(body.password, await getDummyHash());
       throw invalidCredentials();
@@ -112,12 +138,15 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/signup', { config: publicRateLimit(5) }, async (req, reply) => {
     const body = SignupBody.parse(req.body);
     const passwordHash = await hashPassword(body.password);
-    const taken = await db.selectFrom('tenants').select('id').where('slug', '=', body.company).executeTakeFirst();
-    if (taken) throw new AppError(409, 'COMPANY_CODE_TAKEN', 'This company code is already in use. Choose another.');
+    const base = body.company ?? (body.company_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50).padEnd(2, '0'));
+    const isTaken = async (slug: string) => !!(await db.selectFrom('tenants').select('id').where('slug', '=', slug).executeTakeFirst());
+    if (body.company && (await isTaken(base))) throw new AppError(409, 'COMPANY_CODE_TAKEN', 'This company code is already in use. Choose another.');
+    let slug = base;
+    while (!body.company && (await isTaken(slug))) slug = `${base}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const result = await db.transaction().execute(async (tx) => {
       const created = await createTenantIn(tx, {
-        name: body.company_name, slug: body.company, adminEmail: body.email, adminName: body.full_name, adminPasswordHash: passwordHash,
+        name: body.company_name, slug, adminEmail: body.email, adminName: body.full_name, adminPasswordHash: passwordHash,
       });
       const session = await createSession(tx, {
         tenantId: created.tenant.id,
@@ -167,8 +196,11 @@ export async function authRoutes(app: FastifyInstance) {
   // Always answers 202 so the response does not reveal which emails have accounts.
   app.post('/auth/password-reset/request', { config: publicRateLimit(5) }, async (req, reply) => {
     const body = ResetRequestBody.parse(req.body);
-    const tenant = await findActiveTenant(body.company);
-    if (tenant) {
+    // Without a company code, every company where this email has an account gets its own link.
+    const slugs = body.company ? [body.company] : await companiesForEmail(body.email);
+    for (const slug of slugs) {
+      const tenant = await findActiveTenant(slug);
+      if (!tenant) continue;
       const sent = await withTenant(db, tenant.id, async (tx) => {
         const user = await tx
           .selectFrom('users')

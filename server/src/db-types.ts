@@ -177,6 +177,8 @@ export interface RequisitionApprovalsTable {
 }
 
 export interface VacanciesTable {
+  /** Who settles salary and joining for selected candidates. */
+  terms_owner: Generated<'recruiter' | 'interviewer' | 'admin'>;
   id: Generated<string>;
   tenant_id: string;
   requisition_id: string;
@@ -296,6 +298,12 @@ export interface CandidateNotesTable {
 
 export interface ApplicationsTable {
   id: Generated<string>;
+  /** Set by a trigger on insert. */
+  sourcing_code: Generated<string>;
+  /** The department's job role the candidate was sourced for. */
+  job_role_id: Generated<string | null>;
+  /** Set by a trigger once the candidate is selected or hired. */
+  temp_employee_code: Generated<string | null>;
   tenant_id: string;
   candidate_id: string;
   vacancy_id: string;
@@ -698,6 +706,8 @@ export interface Database {
   submissions: SubmissionsTable;
   ownership_events: OwnershipEventsTable;
   tenant_counters: TenantCountersTable;
+  job_roles: JobRolesTable;
+  joining_terms: JoiningTermsTable;
   interview_plans: InterviewPlansTable;
   interviews: InterviewsTable;
   interviewers: InterviewersTable;
@@ -721,3 +731,25 @@ export interface Database {
 
 export type User = Selectable<UsersTable>;
 export type Department = Selectable<DepartmentsTable>;
+
+export interface JobRolesTable {
+  id: Generated<string>;
+  tenant_id: string;
+  department_id: string;
+  name: string;
+  status: Generated<RecordStatus>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface JoiningTermsTable {
+  application_id: string;
+  tenant_id: string;
+  annual_ctc: Numeric;
+  joining_date: Date | string;
+  status: Generated<'proposed' | 'approved'>;
+  proposed_by: string;
+  proposed_at: Generated<Date>;
+  approved_by: string | null;
+  approved_at: Date | null;
+}

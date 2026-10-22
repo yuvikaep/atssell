@@ -6,7 +6,7 @@ import { api, can, isRecruiter, type Me } from '../api';
 import { meQuery, unreadCountQuery } from '../queries';
 
 interface NavItem {
-  to: '/' | '/departments' | '/users' | '/requisitions' | '/vacancies' | '/candidates' | '/pipeline' | '/agencies' | '/portal' | '/portal/submissions' | '/interviews' | '/my-interviews' | '/reports' | '/offers' | '/decisions' | '/sourcing' | '/status' | '/employees' | '/leaderboards' | '/terms' | '/team';
+  to: '/' | '/departments' | '/users' | '/requisitions' | '/vacancies' | '/candidates' | '/pipeline' | '/agencies' | '/portal' | '/portal/submissions' | '/interviews' | '/my-interviews' | '/reports' | '/offers' | '/decisions' | '/sourcing' | '/status' | '/employees' | '/leaderboards' | '/terms' | '/team' | '/salary-joining' | '/setup';
   label: string;
   icon: IconName;
   visible: (me: Me) => boolean;
@@ -23,26 +23,34 @@ const HR_NAV: NavItem[] = [
   { to: '/candidates', label: 'Candidates', icon: 'people', visible: () => true },
   { to: '/interviews', label: 'Interviews', icon: 'calendar', visible: () => true },
   { to: '/agencies', label: 'Agencies', icon: 'agency', visible: () => true },
+  { to: '/salary-joining', label: 'Salary & joining', icon: 'offer', visible: () => true },
   { to: '/employees', label: 'Employees', icon: 'check', visible: () => true },
   { to: '/leaderboards', label: 'Leaderboards', icon: 'trophy', visible: () => true },
   { to: '/reports', label: 'Reports', icon: 'chart', visible: () => true },
   { to: '/departments', label: 'Departments', icon: 'org', visible: (me) => can(me, 'departments.manage') || can(me, 'vacancies.view_all') },
   { to: '/users', label: 'Team & roles', icon: 'shield', visible: () => true },
+  { to: '/setup', label: 'Company setup', icon: 'plus', visible: () => true },
 ];
 const AGENCY_NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: 'home', visible: () => true },
   { to: '/portal', label: 'Open jobs', icon: 'jobs', visible: () => true },
   { to: '/portal/submissions', label: 'My submissions', icon: 'people', visible: () => true },
-  { to: '/terms', label: 'Commercial terms', icon: 'offer', visible: () => true },
+  { to: '/terms', label: 'Commercial terms', icon: 'offer', visible: (me) => me.roles.some((r) => r.code === 'agency_admin') },
   { to: '/team', label: 'My team', icon: 'shield', visible: (me) => me.roles.some((r) => r.code === 'agency_admin') },
 ];
-const INTERVIEWER_NAV: NavItem[] = [{ to: '/my-interviews', label: 'My interviews', icon: 'chat', visible: () => true }];
+const INTERVIEWER_NAV: NavItem[] = [
+  { to: '/my-interviews', label: 'My interviews', icon: 'chat', visible: () => true },
+  { to: '/salary-joining', label: 'Salary & joining', icon: 'offer', visible: () => true },
+  { to: '/employees', label: 'My department staff', icon: 'check', visible: (me) => !!me.head_of_departments?.length },
+];
 
 const RECRUITER_NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: 'home', visible: () => true },
   { to: '/vacancies', label: 'Jobs', icon: 'jobs', visible: () => true },
   { to: '/sourcing', label: 'Sourcing', icon: 'plus', visible: () => true },
   { to: '/status', label: 'Candidate status', icon: 'check', visible: () => true },
+  { to: '/salary-joining', label: 'Salary & joining', icon: 'offer', visible: () => true },
+  { to: '/employees', label: 'My department staff', icon: 'check', visible: (me) => !!me.head_of_departments?.length },
 ];
 
 const NAV: { section?: string; items: NavItem[] }[] = [
@@ -145,7 +153,7 @@ export function AppShell() {
             </div>
           );
         })}
-        <div className="sidebar-foot"><span className="company-dot" aria-hidden>{me.tenant.name[0]}</span><div><strong>{me.tenant.name}</strong><span>Company code {me.tenant.slug}</span></div></div>
+        <div className="sidebar-foot"><span className="company-dot" aria-hidden>{me.tenant.name[0]}</span><div><strong>{me.tenant.name}</strong></div></div>
       </nav>
       <div className="scrim" onClick={() => setDrawer(false)} aria-hidden />
       <header className="topbar">

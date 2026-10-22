@@ -218,9 +218,14 @@ export interface HiringHome {
   feedback_owed: { interview_id: string; round_name: string; scheduled_end: string; candidate_name: string; overdue: boolean }[];
   approvals: { id: string; title: string; headcount: number }[];
   waiting_for_decision: { id: string; candidate_name: string; current_title: string | null; vacancy_id: string; vacancy_title: string; feedback_count: number; avg_rating: number | null; recommendations: string[]; can_decide: boolean }[];
-  vacancies: { id: string; title: string; code: string; location: string; department: string; status: string; headcount: number; days_open: number; hired: number; funnel: { new: number; screening: number; shortlisted: number; interview: number; offer: number } }[];
+  vacancies: { id: string; title: string; code: string; location: string; department: string; department_id: string; status: string; headcount: number; days_open: number; hired: number; funnel: { new: number; screening: number; shortlisted: number; interview: number; offer: number } }[];
   upcoming_interviews: { id: string; round_name: string; scheduled_start: string; timezone: string; mode: string; candidate_name: string; vacancy_title: string; is_mine: boolean }[];
 }
+export interface JobRole { id: string; name: string; status: 'active' | 'inactive'; department_id: string; department_name: string; sourced: number }
+export const jobRolesQuery = (departmentId?: string, status: 'active' | 'all' = 'active') => ({
+  queryKey: ['job-roles', departmentId ?? '', status],
+  queryFn: () => api<{ data: JobRole[] }>('GET', `/job-roles${qs({ department_id: departmentId, status })}`).then((r) => r.data),
+});
 export const hiringHomeQuery = { queryKey: ['hiring-home'], queryFn: () => api<{ data: HiringHome }>('GET', '/hiring-home').then((r) => r.data), refetchInterval: 60_000 };
 
 export const decisionListQuery = (decision: string) => ({
@@ -228,7 +233,7 @@ export const decisionListQuery = (decision: string) => ({
   queryFn: () => api<{ data: import('./api').DecisionRow[] }>('GET', `/decisions${qs({ decision })}`).then((r) => r.data),
 });
 
-export const candidateStatusQuery = (vacancyId: string, q: string) => ({
-  queryKey: ['candidate-status', vacancyId, q],
-  queryFn: () => api<{ data: import('./api').CandidateStatusRow[] }>('GET', `/candidate-status${qs({ vacancy_id: vacancyId || undefined, q: q || undefined })}`).then((r) => r.data),
+export const candidateStatusQuery = (vacancyId: string, q: string, selected = '', jobRoleId = '') => ({
+  queryKey: ['candidate-status', vacancyId, q, selected, jobRoleId],
+  queryFn: () => api<{ data: import('./api').CandidateStatusRow[] }>('GET', `/candidate-status${qs({ vacancy_id: vacancyId || undefined, q: q || undefined, selected: selected || undefined, job_role_id: jobRoleId || undefined })}`).then((r) => r.data),
 });

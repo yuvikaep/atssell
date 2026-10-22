@@ -1,34 +1,54 @@
+import { useMe } from '../components/AppShell';
+import { canExport, ExportButton } from '../components/ExportButton';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useState } from 'react';
 import { Link, useSearch } from '@tanstack/react-router';
-import { api, formatInZone, RECOMMENDATION_LABEL, type CandidateStatusRow, type Recommendation } from '../api';
+import { StatusCounts } from '../components/StatusCounts';
+import { api, upload, formatInZone, RECOMMENDATION_LABEL, type CandidateStatusRow, type Recommendation } from '../api';
 import { ScheduleDialog } from '../components/ScheduleDialog';
 import { SetTimeDialog } from '../components/SetTimeDialog';
-import { Badge, Dialog, EmptyState, ErrorState, Field, FormError, Loading } from '../components/ui';
-import { candidateStatusQuery, hiringHomeQuery } from '../queries';
+import { Badge, Dialog, IdTags, EmptyState, ErrorState, Field, FormError, Loading } from '../components/ui';
+import { candidateStatusQuery, hiringHomeQuery, jobRolesQuery } from '../queries';
 
 /** One list, one status per candidate, and what the interviewers said. Each row can be opened, edited, sourced for another job, or booked. */
 export function CandidateStatusPage() {
   const search = useSearch({ strict: false }) as { job?: string };
   const [job, setJob] = useState(search.job ?? '');
   const [text, setText] = useState('');
+  const [selected, setSelected] = useState('');
+  const [jobRole, setJobRole] = useState('');
+  const roles = useQuery(jobRolesQuery(undefined, 'all'));
   const q = useDeferredValue(text.trim());
   const jobs = useQuery(hiringHomeQuery);
-  const list = useQuery(candidateStatusQuery(job, q));
+  const list = useQuery(candidateStatusQuery(job, q, selected, jobRole));
   const queryClient = useQueryClient();
+  const me = useMe();
   const [booking, setBooking] = useState<CandidateStatusRow | null>(null);
   const [another, setAnother] = useState<CandidateStatusRow | null>(null);
   const refresh = () => Promise.all(['candidate-status', 'interviews', 'tasks', 'hiring-home'].map((k) => queryClient.invalidateQueries({ queryKey: [k] })));
 
   return (
     <>
-      <div className="page-header"><div><h1>Candidate status</h1><p>Where each candidate stands, and what the interviewers said.</p></div></div>
+      <div className="page-header"><div><h1>Candidate status</h1><p>Where each candidate stands, and what the interviewers said.</p></div>
+        {canExport(me) && <ExportButton name="candidate-status" disabled={!list.data?.length} head={['Sourcing ID', 'Temp ID', 'Candidate', 'Job', 'Role', 'Status', 'Feedback avg', 'Remark']}
+          rows={() => (list.data ?? []).map((r) => [r.sourcing_code, r.temp_employee_code, r.candidate_name, r.vacancy_title, r.job_role_name, r.label, r.feedback?.avg_rating, r.remark])} />}
+      </div>
+      <StatusCounts />
       <div className="card">
         <div className="toolbar">
-          <input className="grow" type="search" placeholder="Search by name" aria-label="Search candidates" value={text} onChange={(e) => setText(e.target.value)} />
+          <input className="grow" type="search" placeholder="Search by name, sourcing ID or temp ID" aria-label="Search candidates" value={text} onChange={(e) => setText(e.target.value)} />
           <select aria-label="Job" value={job} onChange={(e) => setJob(e.target.value)}>
             <option value="">All my jobs</option>
             {(jobs.data?.vacancies ?? []).map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}
+          </select>
+          <select aria-label="Job role" value={jobRole} onChange={(e) => setJobRole(e.target.value)}>
+            <option value="">All roles</option>
+            {(roles.data ?? []).map((r) => <option key={r.id} value={r.id}>{r.name} ({r.department_name})</option>)}
+          </select>
+          <select aria-label="Selected" value={selected} onChange={(e) => setSelected(e.target.value)}>
+            <option value="">Everyone</option>
+            <option value="yes">Selected (has temp ID)</option>
+            <option value="no">Not selected yet</option>
           </select>
         </div>
         {list.isPending ? <Loading /> : list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : list.data.length === 0 ? (
@@ -38,15 +58,17 @@ export function CandidateStatusPage() {
             <thead><tr><th>Candidate</th><th>Job</th><th>Status</th><th>Feedback</th><th /></tr></thead>
             <tbody>{list.data.map((r) => (
               <tr key={r.application_id}>
-                <td><strong>{r.candidate_name}</strong>{r.headline && <div className="cell-sub">{r.headline}</div>}</td>
-                <td>{r.vacancy_title}</td>
+                <td><strong>{r.candidate_name}</strong>{r.headline && <div className="cell-sub">{r.headline}</div>}<IdTags sourcing={r.sourcing_code} temp={r.temp_employee_code} /></td>
+                <td>{r.vacancy_title}{r.job_role_name && <div className="cell-sub">Role: {r.job_role_name}</div>}</td>
                 <td>
                   <Badge tone={r.tone}>{r.label}</Badge>
                   {r.scheduled_start ? <div className="cell-sub">{formatInZone(r.scheduled_start, 'Asia/Kolkata')}</div> : r.detail && <div className="cell-sub">{r.detail}</div>}
+                  {r.agreed_salary !== null && <div className="cell-sub">₹{r.agreed_salary.toLocaleString('en-IN')} / yr{r.joining_date ? ` · joins ${r.joining_date}` : ''}</div>}
                 </td>
                 <td><Feedback r={r} /></td>
                 <td className="actions">
                   {r.action && <button className="btn btn-sm btn-primary" onClick={() => setBooking(r)}>{r.action.kind === 'set_time' ? 'Set interview time' : 'Schedule interview'}</button>}
+                  <ResumeButton r={r} onUploaded={refresh} />
                   <Link className="btn btn-sm" to="/candidates/$id" params={{ id: r.candidate_id }} search={{}}>View</Link>
                   <Link className="btn btn-sm" to="/candidates/$id" params={{ id: r.candidate_id }} search={{ edit: '1' }}>Edit</Link>
                   <button className="btn btn-sm" onClick={() => setAnother(r)}>Another job</button>
@@ -80,10 +102,13 @@ function Feedback({ r }: { r: CandidateStatusRow }) {
 }
 
 /** Source the same person for one more of the recruiter's jobs; the profile is reused, not copied. */
-function AnotherJobDialog({ row, jobs, onClose }: { row: CandidateStatusRow; jobs: { id: string; title: string }[]; onClose: () => void }) {
+function AnotherJobDialog({ row, jobs, onClose }: { row: CandidateStatusRow; jobs: { id: string; title: string; department_id: string }[]; onClose: () => void }) {
   const [jobId, setJobId] = useState('');
+  const [jobRoleId, setJobRoleId] = useState('');
+  const deptId = jobs.find((j) => j.id === jobId)?.department_id;
+  const roles = useQuery({ ...jobRolesQuery(deptId), enabled: !!deptId });
   const add = useMutation({
-    mutationFn: () => api('POST', '/applications', { candidate_id: row.candidate_id, vacancy_id: jobId, source_type: 'internal_recruiter' }),
+    mutationFn: () => api('POST', '/applications', { candidate_id: row.candidate_id, vacancy_id: jobId, source_type: 'internal_recruiter', job_role_id: jobRoleId || null }),
   });
   return (
     <Dialog open title={`Source ${row.candidate_name} for another job`} onClose={onClose}
@@ -91,7 +116,7 @@ function AnotherJobDialog({ row, jobs, onClose }: { row: CandidateStatusRow; job
         ? <button className="btn btn-primary" type="button" onClick={onClose}>Done</button>
         : <>
             <button className="btn" type="button" onClick={onClose}>Cancel</button>
-            <button className="btn btn-primary" type="button" disabled={!jobId || add.isPending} onClick={() => add.mutate()}>{add.isPending ? 'Adding…' : 'Add to this job'}</button>
+            <button className="btn btn-primary" type="button" disabled={!jobId || (!!roles.data?.length && !jobRoleId) || add.isPending} onClick={() => add.mutate()}>{add.isPending ? 'Adding…' : 'Add to this job'}</button>
           </>}>
       {add.isSuccess ? (
         <div className="alert alert-success" role="status">{row.candidate_name} was added to {jobs.find((j) => j.id === jobId)?.title}.</div>
@@ -101,13 +126,41 @@ function AnotherJobDialog({ row, jobs, onClose }: { row: CandidateStatusRow; job
         <>
           <FormError error={add.error} />
           <Field id="another-job" label="Job">
-            <select id="another-job" value={jobId} onChange={(e) => setJobId(e.target.value)}>
+            <select id="another-job" value={jobId} onChange={(e) => { setJobId(e.target.value); setJobRoleId(''); }}>
               <option value="">Choose a job</option>
               {jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
             </select>
           </Field>
+          {!!roles.data?.length && (
+            <Field id="another-role" label="Job role">
+              <select id="another-role" value={jobRoleId} onChange={(e) => setJobRoleId(e.target.value)}>
+                <option value="">Choose the role</option>
+                {roles.data.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </Field>
+          )}
         </>
       )}
     </Dialog>
+  );
+}
+
+/** Opens the latest resume, or uploads one when the candidate has none yet (an existing resume is not replaced here). */
+function ResumeButton({ r, onUploaded }: { r: CandidateStatusRow; onUploaded: () => unknown }) {
+  const open = useMutation({
+    mutationFn: () => api<{ data: { url: string } }>('POST', `/candidates/${r.candidate_id}/documents/${r.resume_document_id}/download-url`),
+    // The file downloads (it is sent as an attachment), so the page stays put.
+    onSuccess: (res) => window.location.assign(res.data.url),
+  });
+  const send = useMutation({
+    mutationFn: (file: File) => upload(`/candidates/${r.candidate_id}/documents`, file, { document_type: 'resume' }),
+    onSuccess: onUploaded,
+  });
+  if (r.resume_document_id) return <button className="btn btn-sm" disabled={open.isPending} onClick={() => open.mutate()}>Resume</button>;
+  return (
+    <label className="btn btn-sm" title={send.error ? (send.error as Error).message : 'No resume yet. Upload a PDF, DOC or DOCX.'}>
+      {send.isPending ? 'Uploading…' : send.isError ? 'Upload failed' : 'Upload resume'}
+      <input type="file" accept=".pdf,.doc,.docx" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) send.mutate(f); e.target.value = ''; }} />
+    </label>
   );
 }

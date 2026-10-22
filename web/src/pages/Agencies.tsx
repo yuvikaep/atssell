@@ -1,3 +1,4 @@
+import { ExportButton } from '../components/ExportButton';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
@@ -29,7 +30,11 @@ export function AgenciesPage() {
           <h1>Agencies</h1>
           <p>External recruiting partners. Invite their people, then assign the agency to vacancies. The first to source a candidate is credited automatically; later attempts are rejected as duplicates.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setEditing('new')}>Add agency</button>
+        <div className="actions-row">
+          <ExportButton name="agencies" disabled={!list.data?.length} head={['Agency', 'Status', 'Contact', 'Email', 'Jobs assigned', 'Members']}
+            rows={() => (list.data ?? []).map((a) => [a.name, a.status, a.primary_contact_name, a.primary_contact_email, a.assigned_vacancies, a.members])} />
+          <button className="btn btn-primary" onClick={() => setEditing('new')}>Add agency</button>
+        </div>
       </div>
       <div className="card">
         <div className="toolbar">

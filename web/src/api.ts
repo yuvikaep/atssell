@@ -39,6 +39,8 @@ export type PermissionScope = 'all' | string[];
 
 export interface Me {
   limits?: { resume_max_bytes: number };
+  /** Departments this person heads: they see those employees and can mark exits. */
+  head_of_departments?: string[];
   user: { id: string; email: string; full_name: string; must_change_password?: boolean };
   tenant: { id: string; name: string; slug: string };
   roles: { code: string; name: string; department_id: string | null }[];
@@ -198,6 +200,7 @@ export interface VacancyRow {
 }
 
 export interface VacancyDetail extends Omit<VacancyRow, 'recruiters' | 'agencies'>, VacancyPeople {
+  terms_owner: 'recruiter' | 'interviewer' | 'admin';
   requisition_id: string;
   status_reason: string | null;
   description: string;
@@ -252,7 +255,7 @@ export interface CandidateProfile extends CandidateRow {
     scan_status: string; created_at: string; uploaded_by_name: string | null;
   }[];
   applications: {
-    id: string; status: string; stage_id: string; stage_name: string; stage_code: string; stage_changed_at: string;
+    id: string; sourcing_code: string; temp_employee_code: string | null; job_role_name: string | null; status: string; stage_id: string; stage_name: string; stage_code: string; stage_changed_at: string;
     disposition_reason: string | null; vacancy_id: string; vacancy_code: string; vacancy_title: string; vacancy_status: string;
   }[];
   submissions: { id: string; source_type: string; submitted_at: string; ownership_state: string; vacancy_code: string; submitted_by_name: string | null; agency_name: string | null }[];
@@ -348,6 +351,8 @@ export interface OwnershipView {
 
 export interface PortalSubmission {
   id: string;
+  agreed_salary: number | null; joining_date: string | null;
+  sourcing_code: string; temp_employee_code: string | null;
   submitted_at: string;
   candidate_name: string | null;
   current_title: string | null;
@@ -558,6 +563,10 @@ export interface FeedbackBootstrap {
 
 export interface MyInterviewDetail extends FeedbackBootstrap {
   request: NextRoundRequest | null;
+  has_resume: boolean;
+  application_id: string;
+  can_decide: boolean;
+  last_decision: { decision: string; reason: string | null; decided_at: string } | null;
   id: string;
   status: InterviewStatus;
   feedback_status: 'pending' | 'submitted' | 'waived';
@@ -665,7 +674,8 @@ export function isRecruiter(me: Me) {
   return can(me, 'applications.manage') && can(me, 'vacancies.view_assigned') && !can(me, 'vacancies.view_all') && !can(me, 'users.manage');
 }
 export interface CandidateStatusRow {
-  application_id: string; candidate_id: string; candidate_name: string; headline: string | null;
+  agreed_salary: number | null; joining_date: string | null;
+  application_id: string; resume_document_id: string | null; job_role_id: string | null; job_role_name: string | null; sourcing_code: string; temp_employee_code: string | null; candidate_id: string; candidate_name: string; headline: string | null;
   vacancy_id: string; vacancy_title: string; label: string; tone: 'muted' | 'info' | 'warning' | 'success' | 'danger'; detail: string | null;
   scheduled_start: string | null;
   feedback: { count: number; avg_rating: number; recommendations: string[] } | null;

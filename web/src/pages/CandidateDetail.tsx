@@ -7,7 +7,7 @@ import {
 import { useMe } from '../components/AppShell';
 import { ScheduleDialog } from '../components/ScheduleDialog';
 import { CandidateFormFields, candidateBody, formFromCandidate, type CandidateForm } from '../components/CandidateForm';
-import { BackLink, Badge, DetailGrid, Dialog, ErrorState, Field, fieldError, FormError, formatDate, Loading, Tags } from '../components/ui';
+import { BackLink, Badge, DetailGrid, Dialog, ErrorState, Field, fieldError, FormError, formatDate, Loading, Tags, IdTags } from '../components/ui';
 import { candidateQuery, candidatesQuery, interviewsQuery, vacancyOptionsQuery } from '../queries';
 
 function useRefreshCandidate(id: string) {
@@ -115,7 +115,7 @@ export function CandidateDetailPage() {
                     <tbody>
                       {c.applications.map((a) => (
                         <tr key={a.id}>
-                          <td><Link className="row-link" to="/vacancies/$id" params={{ id: a.vacancy_id }}>{a.vacancy_title}</Link><div className="cell-sub">{a.vacancy_code}</div></td>
+                          <td><Link className="row-link" to="/vacancies/$id" params={{ id: a.vacancy_id }}>{a.vacancy_title}</Link><div className="cell-sub">{a.vacancy_code}{a.job_role_name ? ` · ${a.job_role_name}` : ''}</div><IdTags sourcing={a.sourcing_code} temp={a.temp_employee_code} /></td>
                           <td>
                             <Badge tone={a.status === 'hired' ? 'success' : a.status === 'active' ? 'info' : 'muted'}>{a.stage_name}</Badge>
                             {a.disposition_reason && <div className="cell-sub">{a.disposition_reason}</div>}
@@ -278,9 +278,8 @@ function AddToVacancyDialog({ c, onClose }: { c: CandidateProfile; onClose: () =
   const already = new Set(c.applications.filter((a) => a.status === 'active').map((a) => a.vacancy_id));
   const options = (vacancies.data?.data ?? []).filter((v) => !already.has(v.id));
   const [vacancyId, setVacancyId] = useState('');
-  const [source, setSource] = useState('internal_recruiter');
   const add = useMutation({
-    mutationFn: () => api('POST', '/applications', { candidate_id: c.id, vacancy_id: vacancyId, source_type: source }),
+    mutationFn: () => api('POST', '/applications', { candidate_id: c.id, vacancy_id: vacancyId }),
     onSuccess: async () => { await refresh(); onClose(); },
   });
   return (
@@ -300,11 +299,6 @@ function AddToVacancyDialog({ c, onClose }: { c: CandidateProfile; onClose: () =
             <select id="av-vacancy" value={vacancyId} onChange={(e) => setVacancyId(e.target.value)}>
               <option value="" disabled>{options.length ? 'Choose a vacancy' : 'No open vacancies available'}</option>
               {options.map((v) => <option key={v.id} value={v.id}>{v.vacancy_code} · {v.title} ({v.location})</option>)}
-            </select>
-          </Field>
-          <Field id="av-source" label="Source">
-            <select id="av-source" value={source} onChange={(e) => setSource(e.target.value)}>
-              {['internal_recruiter', 'referral', 'direct', 'job_board', 'other'].map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
             </select>
           </Field>
         </>

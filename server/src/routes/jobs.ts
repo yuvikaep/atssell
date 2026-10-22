@@ -18,6 +18,8 @@ const CreateJob = z
     department_id: z.uuid(),
     location: z.string().trim().min(1, 'Add a location.').max(200),
     openings: z.number().int().min(1).max(1000),
+    // Who settles salary and joining for selected candidates.
+    terms_owner: z.enum(['recruiter', 'interviewer', 'admin']).default('admin'),
     salary_min: z.number().min(0).max(1_000_000_000).nullable().default(null),
     salary_max: z.number().min(0).max(1_000_000_000).nullable().default(null),
     description: z.string().trim().max(10_000).default(''),
@@ -49,7 +51,7 @@ export async function jobRoutes(app: FastifyInstance) {
         .executeTakeFirstOrThrow();
       const vacancy = await tx
         .insertInto('vacancies')
-        .values({ tenant_id: p.tenantId, requisition_id: rq.id, vacancy_code: await nextVacancyCode(tx, p.tenantId), title: body.title, location: body.location, headcount: body.openings, owner_user_id: p.userId })
+        .values({ tenant_id: p.tenantId, requisition_id: rq.id, vacancy_code: await nextVacancyCode(tx, p.tenantId), title: body.title, location: body.location, headcount: body.openings, owner_user_id: p.userId, terms_owner: body.terms_owner })
         .returning(['id', 'vacancy_code'])
         .executeTakeFirstOrThrow();
       await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'job.created', entityType: 'vacancy', entityId: vacancy.id, metadata: { title: body.title, openings: body.openings, requisition_id: rq.id } });

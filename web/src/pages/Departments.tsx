@@ -4,6 +4,7 @@ import { api, can, canAll, type Department } from '../api';
 import { useMe } from '../components/AppShell';
 import { Dialog, EmptyState, ErrorState, Field, fieldError, Forbidden, FormError, Loading, StatusBadge } from '../components/ui';
 import { departmentsQuery, usersQuery } from '../queries';
+import { JobRolesDialog } from '../components/JobRolesDialog';
 import { useSessionState } from '../session-storage';
 
 const STATUSES = ['active', 'inactive', 'all'] as const;
@@ -16,6 +17,7 @@ export function DepartmentsPage() {
   const [status, setStatus] = useSessionState('jm.departments.status', 'active', STATUSES);
   const [editing, setEditing] = useState<Editing>(null);
   const [toggling, setToggling] = useState<Department | null>(null);
+  const [roles, setRoles] = useState<Department | null>(null);
   const list = useQuery({ ...departmentsQuery(status), enabled: can(me, 'departments.manage') || can(me, 'vacancies.view_all') });
 
   if (!can(me, 'departments.manage') && !can(me, 'vacancies.view_all')) return <Forbidden />;
@@ -73,6 +75,7 @@ export function DepartmentsPage() {
                     <td><StatusBadge status={d.status} /></td>
                     {canManage && (
                       <td className="actions">
+                        <button className="btn btn-sm" onClick={() => setRoles(d)}>Job roles</button>
                         <button className="btn btn-sm" onClick={() => setEditing({ mode: 'edit', dept: d })}>Edit</button>
                         <button className={`btn btn-sm ${d.status === 'active' ? 'btn-danger' : ''}`} onClick={() => setToggling(d)}>
                           {d.status === 'active' ? 'Deactivate' : 'Reactivate'}
@@ -88,6 +91,7 @@ export function DepartmentsPage() {
       </div>
 
       {editing && <DepartmentDialog editing={editing} onClose={() => setEditing(null)} />}
+      {roles && <JobRolesDialog department={roles} onClose={() => setRoles(null)} />}
       {toggling && <ToggleStatusDialog dept={toggling} onClose={() => setToggling(null)} />}
     </>
   );

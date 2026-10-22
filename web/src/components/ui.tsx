@@ -163,3 +163,14 @@ export function InviteLinkNotice({ link, email }: { link?: string | null; email?
     </div>
   );
 }
+
+/** The sourcing ID (every sourced candidate) and, once selected, the temp employee ID. */
+export function IdTags({ sourcing, temp }: { sourcing?: string | null; temp?: string | null }) {
+  if (!sourcing && !temp) return null;
+  return (
+    <div className="id-tags">
+      {sourcing && <span className="id-tag" title="Sourcing ID">{sourcing}</span>}
+      {temp && <span className="id-tag id-tag-temp" title="Temp employee ID">{temp}</span>}
+    </div>
+  );
+}

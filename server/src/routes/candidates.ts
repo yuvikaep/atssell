@@ -149,8 +149,9 @@ async function candidateProfile(tx: Tx, p: Principal, id: string) {
     .innerJoin('vacancies as v', 'v.id', 'a.vacancy_id')
     .innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id')
     .innerJoin('pipeline_stages as s', 's.id', 'a.stage_id')
+    .leftJoin('job_roles as jr', 'jr.id', 'a.job_role_id')
     .select([
-      'a.id', 'a.status', 'a.stage_id', 's.name as stage_name', 's.code as stage_code', 'a.stage_changed_at',
+      'jr.name as job_role_name', 'a.id', 'a.sourcing_code', 'a.temp_employee_code', 'a.status', 'a.stage_id', 's.name as stage_name', 's.code as stage_code', 'a.stage_changed_at',
       'a.disposition_reason', 'a.created_at', 'v.id as vacancy_id', 'v.vacancy_code', 'v.title as vacancy_title', 'v.status as vacancy_status',
     ])
     .where('a.candidate_id', '=', id)

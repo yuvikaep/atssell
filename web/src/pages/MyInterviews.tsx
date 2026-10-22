@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { api, ApiError, formatInZone, INTERVIEW_STATUS_LABEL, MODE_LABEL, RECOMMENDATION_LABEL, type MyInterviewRow } from '../api';
+import { StatusCounts } from '../components/StatusCounts';
+import { api, ApiError, type MyInterviewDetail, formatInZone, INTERVIEW_STATUS_LABEL, MODE_LABEL, RECOMMENDATION_LABEL, type MyInterviewRow } from '../api';
 import { FeedbackForm, type FeedbackValues } from '../components/FeedbackForm';
 import { RemarkBanner } from '../components/RemarkBanner';
-import { BackLink, Badge, EmptyState, ErrorState, formatDate, Loading } from '../components/ui';
+import { NextRoundDialog } from '../components/NextRoundDialog';
+import { BackLink, Badge, EmptyState, ErrorState, fieldError, formatDate, Loading } from '../components/ui';
 import { myInterviewQuery, myInterviewsQuery } from '../queries';
 import { STATUS_TONE } from './InterviewDetail';
 
@@ -57,6 +60,7 @@ export function MyInterviewsPage() {
           <p>Interviews you are on the panel for, and the feedback you owe.</p>
         </div>
       </div>
+      <StatusCounts />
       {rows.length === 0 ? <div className="card"><EmptyState title="No interviews yet">When you are added to an interview panel it appears here.</EmptyState></div> : (
         <>
           <Section title="Feedback to give" rows={owing} empty="Nothing waiting on you." />
@@ -91,7 +95,7 @@ export function MyInterviewDetailPage() {
       <BackLink to="/my-interviews">My interviews</BackLink>
       <div className="page-header">
         <div>
-          <div className="title-row"><h1>{d.candidate.full_name}</h1><Badge tone={STATUS_TONE[d.status]}>{INTERVIEW_STATUS_LABEL[d.status]}</Badge></div>
+          <div className="title-row"><h1>{d.candidate.full_name}</h1><Badge tone={STATUS_TONE[d.status]}>{INTERVIEW_STATUS_LABEL[d.status]}</Badge>{d.has_resume ? <ViewResume interviewId={d.id} /> : <span className="muted">No resume uploaded</span>}</div>
           <p>{d.job.title} · {d.interview.round_name} · {formatInZone(d.interview.scheduled_start, d.interview.timezone)}</p>
         </div>
       </div>
@@ -105,6 +109,7 @@ export function MyInterviewDetailPage() {
                 <div className="alert alert-success" role="status">Sent {formatDate(d.my_feedback.submitted_at)}. If something needs changing, ask the recruiter.</div>
                 <p>Overall <strong>{d.my_feedback.overall_rating} of 5</strong> · {RECOMMENDATION_LABEL[d.my_feedback.recommendation]}</p>
                 {d.my_feedback.notes && <p className="prose">{d.my_feedback.notes}</p>}
+                <YourDecision d={d} />
               </>
             ) : !d.can_submit ? (
               <p className="empty-inline">Feedback is not expected for this interview.</p>
@@ -138,4 +143,53 @@ export function MyInterviewDetailPage() {
       </div>
     </>
   );
+}
+
+const DECISION_LABEL: Record<string, string> = { select: 'Selected', hold: 'On hold', reject: 'Rejected', additional_round: 'Sent to next round', advance: 'Moved forward' };
+
+/** After their feedback, the interviewer decides: select, hold, reject, or send to the next round. No admin confirmation. */
+function YourDecision({ d }: { d: MyInterviewDetail }) {
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState<null | 'hold' | 'reject'>(null);
+  const [reason, setReason] = useState('');
+  const [nextRound, setNextRound] = useState(false);
+  const refresh = () => Promise.all(['my-interview', 'my-interviews', 'candidate-status', 'hiring-home'].map((k) => queryClient.invalidateQueries({ queryKey: [k] })));
+  const decide = useMutation({
+    mutationFn: (decision: string) => api('POST', `/applications/${d.application_id}/decisions`, { decision, ...(reason.trim() ? { reason: reason.trim() } : {}) }),
+    onSuccess: async () => { setAsking(null); setReason(''); await refresh(); },
+  });
+  return (
+    <div className="section" style={{ paddingLeft: 0, paddingRight: 0 }}>
+      <h2>Your decision</h2>
+      {d.last_decision && (
+        <p>Current: <strong>{DECISION_LABEL[d.last_decision.decision] ?? d.last_decision.decision}</strong>{d.last_decision.reason ? ` · “${d.last_decision.reason}”` : ''}</p>
+      )}
+      {!d.can_decide ? <p className="muted">This candidate's application is closed.</p> : asking ? (
+        <div className="actions-row">
+          <input aria-label="Reason" autoFocus placeholder={asking === 'hold' ? 'Why on hold? (short note)' : 'Why rejected? (short note)'} value={reason} onChange={(e) => setReason(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+          <button className="btn btn-primary" disabled={decide.isPending || !reason.trim()} onClick={() => decide.mutate(asking)}>Confirm</button>
+          <button className="btn" onClick={() => { setAsking(null); setReason(''); }}>Cancel</button>
+        </div>
+      ) : (
+        <div className="actions-row">
+          <button className="btn btn-primary" disabled={decide.isPending} onClick={() => decide.mutate('select')}>Select</button>
+          <button className="btn" onClick={() => setNextRound(true)}>Next round</button>
+          <button className="btn" onClick={() => setAsking('hold')}>Hold</button>
+          <button className="btn btn-danger" onClick={() => setAsking('reject')}>Reject</button>
+        </div>
+      )}
+      {decide.error && <p className="field-error">{fieldError(decide.error, 'reason') ?? (decide.error as Error).message}</p>}
+      {nextRound && <NextRoundDialog applicationId={d.application_id} candidateName={d.candidate.full_name} onClose={() => { setNextRound(false); refresh(); }} />}
+    </div>
+  );
+}
+
+/** The candidate's latest resume for this interviewer (a short-lived signed link). */
+function ViewResume({ interviewId }: { interviewId: string }) {
+  const open = useMutation({
+    mutationFn: () => api<{ data: { url: string } }>('POST', `/me/interviews/${interviewId}/resume-url`),
+    // The file downloads (it is sent as an attachment), so the page stays put.
+    onSuccess: (res) => window.location.assign(res.data.url),
+  });
+  return <button className="btn btn-sm" disabled={open.isPending} onClick={() => open.mutate()}>{open.isPending ? 'Opening…' : 'View resume'}</button>;
 }

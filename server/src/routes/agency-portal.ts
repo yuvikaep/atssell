@@ -94,10 +94,15 @@ function presentSubmission(r: {
   id: string; submitted_at: Date; ownership_state: Parameters<typeof agencyOwnershipView>[0];
   submitted_profile: Record<string, unknown> | null; vacancy_id: string; vacancy_code: string; vacancy_title: string;
   stage_name: string; app_status: string; resume_document_id: string | null; submitted_by_name?: string | null;
+  sourcing_code: string; temp_employee_code: string | null; agreed_salary: number | null; joining_date: string | null;
 }) {
   const profile = (r.submitted_profile ?? {}) as Record<string, unknown>;
   return {
     id: r.id,
+    sourcing_code: r.sourcing_code,
+    agreed_salary: r.agreed_salary === null ? null : Number(r.agreed_salary),
+    joining_date: r.joining_date,
+    temp_employee_code: r.temp_employee_code,
     submitted_at: r.submitted_at,
     candidate_name: profile.full_name ?? null,
     current_title: profile.current_title ?? null,
@@ -116,7 +121,9 @@ function presentSubmission(r: {
 }
 
 const SUBMISSION_COLUMNS = [
-  's.id', 's.submitted_at', 's.ownership_state', 's.submitted_profile', 's.resume_document_id',
+  's.id', 'a.sourcing_code', 'a.temp_employee_code', 's.submitted_at', 's.ownership_state',
+  sql<number | null>`coalesce((SELECT e.annual_ctc FROM employment_records e WHERE e.application_id = a.id), (SELECT jt.annual_ctc FROM joining_terms jt WHERE jt.application_id = a.id AND jt.status = 'approved'))`.as('agreed_salary'),
+  sql<string | null>`coalesce((SELECT e.joined_on FROM employment_records e WHERE e.application_id = a.id), (SELECT jt.joining_date FROM joining_terms jt WHERE jt.application_id = a.id AND jt.status = 'approved'))::text`.as('joining_date'), 's.submitted_profile', 's.resume_document_id',
   'a.id as application_id', 'a.vacancy_id', 'v.vacancy_code', 'v.title as vacancy_title', 'st.name as stage_name', 'a.status as app_status',
 ] as const;
 

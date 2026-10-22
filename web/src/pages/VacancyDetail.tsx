@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { api, ApiError, can, canAll, EMPLOYMENT_TYPES, formatCtcRange, formatDay, VACANCY_STATUS_LABEL, type VacancyDetail, type VacancyStatus } from '../api';
 import { useMe } from '../components/AppShell';
 import { InterviewRounds } from '../components/InterviewRounds';
-import { PipelineBoard } from '../components/PipelineBoard';
+import { JobCandidates } from '../components/JobCandidates';
 import { BackLink, Badge, DetailGrid, Dialog, ErrorState, Field, fieldError, FormError, Loading, Tags } from '../components/ui';
 import { agenciesQuery, usersQuery, vacancyQuery } from '../queries';
 import { useSessionState } from '../session-storage';
@@ -43,7 +43,7 @@ export function VacancyDetailPage() {
             <h1>{v.title}</h1>
             <Badge tone={VACANCY_TONE[v.status]}>{VACANCY_STATUS_LABEL[v.status]}</Badge>
           </div>
-          <p>{v.vacancy_code} · {v.department_name} · {v.location} · open for {v.age_days} {v.age_days === 1 ? 'day' : 'days'}</p>
+          <p>{v.vacancy_code} · {v.department_name} · {v.location} · {v.headcount} {v.headcount === 1 ? 'opening' : 'openings'} · open for {v.age_days} {v.age_days === 1 ? 'day' : 'days'}</p>
         </div>
         {v.can.manage && (
           <div className="actions-row">
@@ -66,7 +66,7 @@ export function VacancyDetailPage() {
           <button className="tab" role="tab" aria-selected={tab === 'overview'} onClick={() => setTab('overview')}>Overview &amp; assignments</button>
         </div>
         {tab === 'candidates' ? (
-          <PipelineBoard vacancyId={v.id} canMove={can(me, 'applications.manage')} canAdd={v.can.add_candidates} canSchedule={can(me, 'interviews.manage')} canOffer={can(me, 'offers.manage')} />
+          <JobCandidates vacancyId={v.id} canAdd={v.can.add_candidates} />
         ) : (
           <Overview v={v} />
         )}
@@ -87,6 +87,7 @@ function Overview({ v }: { v: VacancyDetail }) {
           <h2 style={{ marginBottom: 12 }}>Role</h2>
           <DetailGrid items={[
             ['Positions', v.headcount],
+            ['Salary & joining by', { admin: 'Admin', recruiter: 'Recruiter on this job', interviewer: 'Interviewer who selects' }[v.terms_owner] ?? 'Admin'],
             ['Employment type', EMPLOYMENT_TYPES[v.employment_type] ?? v.employment_type],
             ['Priority', <span style={{ textTransform: 'capitalize' }}>{v.priority}</span>],
             ['Experience', v.min_experience_years != null || v.max_experience_years != null ? `${v.min_experience_years ?? 0}–${v.max_experience_years ?? '+'} years` : '—'],
@@ -134,7 +135,7 @@ function Recruiters({ v }: { v: VacancyDetail }) {
     onSuccess: refresh,
   });
   const assignedIds = new Set(v.recruiters.map((r) => r.id));
-  const candidates = (users.data?.data ?? []).filter((u) => !assignedIds.has(u.id) && u.roles.some((r) => !r.code.startsWith('agency')));
+  const candidates = (users.data?.data ?? []).filter((u) => !assignedIds.has(u.id) && u.roles.some((r) => r.code === 'internal_recruiter'));
 
   return (
     <div className="card section">

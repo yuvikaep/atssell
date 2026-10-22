@@ -7,7 +7,7 @@
 import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { z } from 'zod';
-import { hasAny, vacancyVisible } from '../access.js';
+import { hasAny, vacancyVisible, interviewedApplication } from '../access.js';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
 import type { EvaluationTemplate, FeedbackRecommendation, InterviewMode } from '../db-types.js';
@@ -249,15 +249,42 @@ export async function feedbackRoutes(app: FastifyInstance) {
     return withTenant(db, p.tenantId, async (tx) => {
       const ctx = await myInterview(tx, p, id);
       const mine = await tx.selectFrom('feedback').select(['id', 'mode', 'overall_rating', 'recommendation', 'competency_ratings', 'notes', 'submitted_at']).where('interview_id', '=', id).where('interviewer_id', '=', ctx.interviewer_id).executeTakeFirst();
+      const app = await tx.selectFrom('interviews as i').innerJoin('applications as a', 'a.id', 'i.application_id')
+        .select(['a.id', 'a.status']).where('i.id', '=', id).executeTakeFirstOrThrow();
+      const resume = await tx.selectFrom('interviews as i').innerJoin('applications as a', 'a.id', 'i.application_id').innerJoin('candidate_documents as cd', 'cd.candidate_id', 'a.candidate_id')
+        .select('cd.id').where('i.id', '=', id).where('cd.document_type', '=', 'resume').where('cd.scan_status', '=', 'clean').limit(1).executeTakeFirst();
+      const last = await tx.selectFrom('hiring_decisions').select(['decision', 'reason', 'decided_at']).where('application_id', '=', app.id).orderBy('decided_at', 'desc').limit(1).executeTakeFirst();
       return {
         data: {
           id, status: ctx.status, feedback_status: ctx.feedback_status,
+          // After their feedback, an interviewer decides on the candidate themselves.
+          has_resume: !!resume,
+          application_id: app.id, can_decide: app.status === 'active' && ctx.feedback_status === 'submitted', last_decision: last ?? null,
           can_submit: ctx.feedback_status === 'pending' && !['cancelled', 'no_show'].includes(ctx.status),
           ...bootstrap(ctx), my_feedback: mine ?? null, request: await nextRoundRequest(tx, id),
           modes: Object.entries(MODE_LABEL).map(([value, label]) => ({ value, label })),
         },
       };
     });
+  });
+
+  // The interviewer's short-lived link to the candidate's latest resume.
+  app.post('/me/interviews/:id/resume-url', async (req) => {
+    const p = principal(req);
+    const { id } = idParams.parse(req.params);
+    const expiresAt = new Date(Date.now() + config.FILE_URL_TTL_SECONDS * 1000);
+    const docId = await withTenant(db, p.tenantId, async (tx) => {
+      await myInterview(tx, p, id);
+      const d = await tx.selectFrom('interviews as i').innerJoin('applications as a', 'a.id', 'i.application_id')
+        .innerJoin('candidate_documents as cd', 'cd.candidate_id', 'a.candidate_id')
+        .select('cd.id').where('i.id', '=', id).where('cd.document_type', '=', 'resume').where('cd.scan_status', '=', 'clean')
+        .orderBy('cd.created_at', 'desc').limit(1).executeTakeFirst();
+      if (!d) throw notFound('Resume');
+      await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'interview.resume_link_issued', entityType: 'interview', entityId: id, metadata: { document_id: d.id } });
+      return d.id;
+    });
+    const signed = signFileToken(config.FILE_URL_SECRET, { t: p.tenantId, d: docId, e: Math.floor(expiresAt.getTime() / 1000) });
+    return { data: { url: `/api/v1/files/${signed}`, expires_at: expiresAt } };
   });
 
   app.post('/me/interviews/:id/feedback', async (req, reply) => {
@@ -422,9 +449,12 @@ export async function feedbackRoutes(app: FastifyInstance) {
     const { id } = idParams.parse(req.params);
     const body = DecisionBody.parse(req.body);
     const data = await withTenant(db, p.tenantId, async (tx) => {
-      const app = await tx.selectFrom('applications as a').innerJoin('vacancies as v', 'v.id', 'a.vacancy_id').innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id').select(['a.id', 'a.status', 'rq.department_id']).where('a.id', '=', id).where(vacancyVisible(p, null)).executeTakeFirst();
+      const appBase = () => tx.selectFrom('applications as a').innerJoin('vacancies as v', 'v.id', 'a.vacancy_id').innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id').select(['a.id', 'a.status', 'rq.department_id']).where('a.id', '=', id);
+      // An interviewer of this candidate decides directly; otherwise the decision permission is needed.
+      const interviewed = await interviewedApplication(tx, p.userId, id);
+      const app = interviewed ? await appBase().executeTakeFirst() : await appBase().where(vacancyVisible(p, null)).executeTakeFirst();
       if (!app) throw notFound('Application');
-      requirePermission(p, 'decisions.record', app.department_id);
+      if (!interviewed) requirePermission(p, 'decisions.record', app.department_id);
       if (app.status !== 'active') throw new AppError(409, 'APPLICATION_CLOSED', 'This application is closed.');
       if (['reject', 'hold'].includes(body.decision) && !body.reason) throw new AppError(400, 'VALIDATION_ERROR', 'Some fields are invalid.', [{ path: 'reason', message: 'Give a reason for this decision.' }]);
       const row = await tx.insertInto('hiring_decisions').values({ tenant_id: p.tenantId, application_id: id, decision: body.decision, reason: body.reason ?? null, decided_by: p.userId }).returning(['id', 'decision', 'reason', 'decided_at']).executeTakeFirstOrThrow();

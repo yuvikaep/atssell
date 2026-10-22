@@ -34,6 +34,13 @@ function need(p: Principal) {
   if (!can(p, 'employment.manage')) throw forbidden();
 }
 
+async function headDepartmentIds(tx: Tx, userId: string) {
+  return (await tx.selectFrom('departments').select('id').where('head_user_id', '=', userId).where('status', '=', 'active').execute()).map((d) => d.id);
+}
+async function departmentOfVacancy(tx: Tx, vacancyId: string) {
+  return (await tx.selectFrom('vacancies as v').innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id').select('rq.department_id').where('v.id', '=', vacancyId).executeTakeFirstOrThrow()).department_id;
+}
+
 function employmentBase(tx: Tx) {
   return tx
     .selectFrom('employment_records as e')
@@ -42,10 +49,11 @@ function employmentBase(tx: Tx) {
     .leftJoin('agencies as ag', 'ag.id', 'e.source_agency_id')
     .leftJoin('users as su', 'su.id', 'e.source_user_id')
     .leftJoin('agency_terms as t', 't.id', 'e.agency_terms_id')
-    .leftJoin('replacement_records as r', 'r.employment_id', 'e.id');
+    .leftJoin('replacement_records as r', 'r.employment_id', 'e.id')
+    .innerJoin('applications as ap', 'ap.id', 'e.application_id');
 }
 const COLS = [
-  'e.id', 'e.application_id', 'e.candidate_id', 'c.full_name as candidate_name', 'e.vacancy_id', 'v.title as job_title', 'v.vacancy_code',
+  'e.id', 'e.application_id', 'ap.sourcing_code', 'ap.temp_employee_code', 'e.candidate_id', 'c.full_name as candidate_name', 'e.vacancy_id', 'v.title as job_title', 'v.vacancy_code',
   'e.joined_on', 'e.designation', 'e.annual_ctc', 'e.status', 'e.exit_date', 'e.exit_reason', 'e.invoice_status', 'e.invoice_reference',
   'ag.name as agency_name', 'e.source_agency_id', 'su.full_name as recruiter_name',
   't.version as terms_version', 't.payment_model', 't.fee_type', 't.fee_value', 't.lockin_days', 't.replacement_days',
@@ -128,28 +136,64 @@ export async function employmentRoutes(app: FastifyInstance) {
 
   app.get('/employment', async (req) => {
     const p = principal(req);
-    need(p);
     const f = ListQuery.parse(req.query);
     return withTenant(db, p.tenantId, async (tx) => {
-      let q = employmentBase(tx);
+      // A department head sees only their departments' people, without commercials.
+      const admin = can(p, 'employment.manage');
+      const heads = admin ? [] : await headDepartmentIds(tx, p.userId);
+      if (!admin && heads.length === 0) throw forbidden();
+      let q = employmentBase(tx).$if(!admin, (x) => x.innerJoin('requisitions as hrq', 'hrq.id', 'v.requisition_id').where('hrq.department_id', 'in', heads));
       if (f.status !== 'all') q = q.where('e.status', '=', f.status);
       if (f.agency_id) q = q.where('e.source_agency_id', '=', f.agency_id);
       if (f.vacancy_id) q = q.where('e.vacancy_id', '=', f.vacancy_id);
-      if (f.q) q = q.where('c.full_name', 'ilike', `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+      if (f.q) {
+        const like = `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        q = q.where((eb) => eb.or([eb('c.full_name', 'ilike', like), eb('ap.sourcing_code', 'ilike', like), eb('ap.temp_employee_code', 'ilike', like)]));
+      }
       const { total } = await q.select(sql<number>`count(*)::int`.as('total')).executeTakeFirstOrThrow();
       const rows = await q.select([...COLS]).orderBy('e.joined_on', 'desc').limit(f.page_size).offset((f.page - 1) * f.page_size).execute();
-      return { data: rows.map(present), page: f.page, page_size: f.page_size, total };
+      const out = rows.map(present).map((r) => (admin ? r : { ...r, annual_ctc: null, fee_amount: null, fee_value: null, fee_type: null, payment_model: null, terms_version: null, invoice_status: null, invoice_reference: null }));
+      return { data: out, page: f.page, page_size: f.page_size, total, can_manage: admin };
     });
   });
 
-  app.post('/employment/:id/exit', async (req) => {
+  // Selected (they have a temp employee ID) but not marked joined yet.
+  app.get('/employment/yet-to-join', async (req) => {
     const p = principal(req);
     need(p);
+    const f = z.object({ q: z.string().trim().max(200).optional(), vacancy_id: z.uuid().optional() }).parse(req.query);
+    return withTenant(db, p.tenantId, async (tx) => {
+      let q = tx.selectFrom('applications as a')
+        .innerJoin('candidates as c', 'c.id', 'a.candidate_id')
+        .innerJoin('vacancies as v', 'v.id', 'a.vacancy_id')
+        .leftJoin('submissions as sb', (j) => j.onRef('sb.application_id', '=', 'a.id').on('sb.ownership_state', '=', 'accepted'))
+        .leftJoin('agencies as ag', 'ag.id', 'sb.agency_id')
+        .leftJoin('users as su', 'su.id', 'sb.source_user_id')
+        .leftJoin('joining_terms as jt', (j) => j.onRef('jt.application_id', '=', 'a.id').on('jt.status', '=', 'approved'))
+        .select(['jt.annual_ctc as agreed_salary', sql<string | null>`jt.joining_date::text`.as('joining_date'), 'a.id as application_id', 'a.sourcing_code', 'a.temp_employee_code', 'c.id as candidate_id', 'c.full_name as candidate_name', 'c.current_title',
+          'v.id as vacancy_id', 'v.title as job_title', 'ag.name as agency_name', 'su.full_name as recruiter_name',
+          (eb) => eb.selectFrom('hiring_decisions as d').select('d.decided_at').whereRef('d.application_id', '=', 'a.id').where('d.decision', '=', 'select').orderBy('d.decided_at', 'desc').limit(1).as('selected_on')])
+        .where('a.temp_employee_code', 'is not', null)
+        .where('a.status', '=', 'active')
+        .where((eb) => eb.not(eb.exists(eb.selectFrom('employment_records as e').select('e.id').whereRef('e.application_id', '=', 'a.id'))));
+      if (f.vacancy_id) q = q.where('a.vacancy_id', '=', f.vacancy_id);
+      if (f.q) {
+        const like = `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        q = q.where((eb) => eb.or([eb('c.full_name', 'ilike', like), eb('a.sourcing_code', 'ilike', like), eb('a.temp_employee_code', 'ilike', like)]));
+      }
+      return { data: await q.orderBy('a.temp_employee_code').limit(500).execute() };
+    });
+  });
+
+  // The admin, or the head of the employee's department, marks an exit.
+  app.post('/employment/:id/exit', async (req) => {
+    const p = principal(req);
     const { id } = idParams.parse(req.params);
     const body = ExitBody.parse(req.body);
     return withTenant(db, p.tenantId, async (tx) => {
       const e = await tx.selectFrom('employment_records').selectAll().where('id', '=', id).forUpdate().executeTakeFirst();
       if (!e) throw notFound('Employment record');
+      if (!can(p, 'employment.manage') && !(await headDepartmentIds(tx, p.userId)).includes(await departmentOfVacancy(tx, e.vacancy_id))) throw forbidden();
       if (e.status === 'exited') throw new AppError(409, 'ALREADY_EXITED', 'This person is already marked as exited.');
       if (body.exit_date < e.joined_on) throw new AppError(400, 'VALIDATION_ERROR', 'Some fields are invalid.', [{ path: 'exit_date', message: 'The exit date cannot be before the joining date.' }]);
       await tx.updateTable('employment_records').set({ status: 'exited', exit_date: body.exit_date, exit_reason: body.exit_reason, marked_exited_by: p.userId, updated_at: sql`now()` }).where('id', '=', id).execute();

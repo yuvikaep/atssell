@@ -1,3 +1,4 @@
+import { PipelineChart } from '../components/PipelineChart';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -32,6 +33,7 @@ export function MyPerformance({ kind, name }: { kind: 'recruiter' | 'agency'; na
         <div className="card section"><h2>No submissions yet</h2><p className="muted">Once you submit candidates, your numbers appear here.</p></div>
       ) : (
         <>
+          <PipelineChart />
           <div className="stats">
             {m.rank && q.data.recruiters_ranked ? <Stat label="Your rank" value={`#${m.rank}`} hint={`of ${q.data.recruiters_ranked} recruiters`} /> : null}
             <Stat label="Valid submissions" value={m.valid_submissions} hint={`${m.raw_submissions} attempted${m.duplicate_attempts ? `, ${m.duplicate_attempts} duplicate` : ''}`} />

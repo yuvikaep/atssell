@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { call, setupApp, type TestContext } from './helpers.js';
-import { applicationOnVacancy, goodFeedback, inHours, scheduleInterview, setupCompany } from './hiring-helpers.js';
+import { applicationOnVacancy, goodFeedback, inHours, PDF, scheduleInterview, setupCompany, uploadDocument } from './hiring-helpers.js';
 
 let ctx: TestContext;
 let s: Awaited<ReturnType<typeof setupCompany>>;
@@ -66,5 +66,89 @@ describe('candidate status for recruiters', () => {
     const rows = (await call(ctx, await other.as('admin'), 'GET', '/candidate-status')).json().data as unknown[];
     expect(rows).toHaveLength(0);
     expect((await call(ctx, null, 'GET', '/candidate-status')).statusCode).toBe(401);
+  });
+});
+
+describe('sourcing ID and temp employee ID', () => {
+  type Row = { application_id: string; sourcing_code: string; temp_employee_code: string | null };
+  const list = async (query = '') => (await call(ctx, recruiter, 'GET', `/candidate-status${query}`)).json().data as Row[];
+
+  it('gives every sourced candidate a sourcing ID, and a temp employee ID once selected; both can be searched', async () => {
+    const a = await assigned('eeeee');
+    const b = await assigned('ffffff');
+    const rows = await list();
+    const ra = rows.find((r) => r.application_id === a.applicationId)!;
+    const rb = rows.find((r) => r.application_id === b.applicationId)!;
+    expect(ra.sourcing_code).toMatch(/^SRC-\d{6}$/);
+    expect(rb.sourcing_code).not.toBe(ra.sourcing_code);
+    expect(ra.temp_employee_code).toBeNull();
+
+    await call(ctx, engManager, 'POST', `/applications/${a.applicationId}/decisions`, { decision: 'select', reason: 'Good' });
+    const selected = (await list()).find((r) => r.application_id === a.applicationId)!;
+    expect(selected.temp_employee_code).toMatch(/^TEMP-\d{5}$/);
+    // A second select keeps the same ID.
+    await call(ctx, engManager, 'POST', `/applications/${a.applicationId}/decisions`, { decision: 'select', reason: 'Still good' });
+    expect((await list()).find((r) => r.application_id === a.applicationId)!.temp_employee_code).toBe(selected.temp_employee_code);
+
+    expect((await list(`?q=${ra.sourcing_code}`)).map((r) => r.application_id)).toEqual([a.applicationId]);
+    expect((await list(`?q=${selected.temp_employee_code}`)).map((r) => r.application_id)).toEqual([a.applicationId]);
+    const onlySelected = await list('?selected=yes');
+    expect(onlySelected.some((r) => r.application_id === a.applicationId)).toBe(true);
+    expect(onlySelected.some((r) => r.application_id === b.applicationId)).toBe(false);
+    expect((await list('?selected=no')).some((r) => r.application_id === b.applicationId)).toBe(true);
+  });
+});
+
+describe('an interviewer decides on the candidate they interviewed', () => {
+  it('selects, holds, rejects or sends to the next round without the decision permission; others cannot', async () => {
+    const { addUser, login } = await import('./helpers.js');
+    const head = await addUser(ctx, s.co.tenant.id, { email: `head@${s.co.slug}.test`, role: 'interviewer' });
+    const outsider = await addUser(ctx, s.co.tenant.id, { email: `other@${s.co.slug}.test`, role: 'interviewer' });
+    const headCookie = await login(ctx, s.co.slug, `head@${s.co.slug}.test`);
+    const otherCookie = await login(ctx, s.co.slug, `other@${s.co.slug}.test`);
+    const a = await assigned('ggggggg');
+    const iv = await scheduleInterview(ctx, recruiter, a.applicationId, { scheduled_start: inHours(-2), scheduled_end: inHours(-1), panel: [{ user_id: head.id }] });
+    expect((await call(ctx, headCookie, 'POST', `/me/interviews/${iv.id}/feedback`, goodFeedback())).statusCode).toBe(201);
+
+    const detail = (await call(ctx, headCookie, 'GET', `/me/interviews/${iv.id}`)).json().data;
+    expect(detail).toMatchObject({ application_id: a.applicationId, can_decide: true });
+
+    expect((await call(ctx, otherCookie, 'POST', `/applications/${a.applicationId}/decisions`, { decision: 'select' })).statusCode).not.toBe(201);
+    expect((await call(ctx, headCookie, 'POST', `/applications/${a.applicationId}/decisions`, { decision: 'hold', reason: 'Check notice' })).statusCode).toBe(201);
+    const next = await call(ctx, headCookie, 'POST', `/applications/${a.applicationId}/next-round`, { remark: 'Meet the director', interviewer_user_ids: [outsider.id] });
+    expect(next.statusCode, next.body).toBe(201);
+    expect((await call(ctx, headCookie, 'GET', '/directory/users')).statusCode).toBe(200);
+    expect((await call(ctx, headCookie, 'POST', `/applications/${a.applicationId}/decisions`, { decision: 'select' })).statusCode).toBe(201);
+    const last = await ctx.adminDb.selectFrom('hiring_decisions').select(['decision', 'decided_by']).where('application_id', '=', a.applicationId).orderBy('decided_at', 'desc').executeTakeFirstOrThrow();
+    expect(last).toEqual({ decision: 'select', decided_by: head.id });
+    // Selected, not joined yet: listed under Employees → Yet to join, with the temp ID.
+    const yet = (await call(ctx, admin, 'GET', '/employment/yet-to-join')).json().data;
+    expect(yet.find((r: { application_id: string }) => r.application_id === a.applicationId)?.temp_employee_code).toMatch(/^TEMP-/);
+  });
+});
+
+describe('resumes for recruiters and interviewers', () => {
+  it('shows the latest resume on candidate status, and lets only the panel interviewer open it', async () => {
+    const { addUser, login } = await import('./helpers.js');
+    const panel = await addUser(ctx, s.co.tenant.id, { email: `panel@${s.co.slug}.test`, role: 'interviewer' });
+    await addUser(ctx, s.co.tenant.id, { email: `nopanel@${s.co.slug}.test`, role: 'interviewer' });
+    const a = await assigned('hhhhhhhh');
+    const iv = await scheduleInterview(ctx, recruiter, a.applicationId, { scheduled_start: inHours(2), scheduled_end: inHours(3), panel: [{ user_id: panel.id }] });
+    const panelCookie = await login(ctx, s.co.slug, `panel@${s.co.slug}.test`);
+    const otherCookie = await login(ctx, s.co.slug, `nopanel@${s.co.slug}.test`);
+
+    expect((await call(ctx, panelCookie, 'GET', `/me/interviews/${iv.id}`)).json().data.has_resume).toBe(false);
+    expect((await call(ctx, panelCookie, 'POST', `/me/interviews/${iv.id}/resume-url`)).statusCode).toBe(404);
+    expect((await uploadDocument(ctx, recruiter, a.candidateId, 'cv.pdf', PDF('panel'))).statusCode).toBe(201);
+
+    const row = (await call(ctx, recruiter, 'GET', '/candidate-status')).json().data.find((r: { application_id: string }) => r.application_id === a.applicationId);
+    expect(row.resume_document_id).toBeTruthy();
+    expect((await call(ctx, panelCookie, 'GET', `/me/interviews/${iv.id}`)).json().data.has_resume).toBe(true);
+    const link = await call(ctx, panelCookie, 'POST', `/me/interviews/${iv.id}/resume-url`);
+    expect(link.statusCode, link.body).toBe(200);
+    const file = await ctx.app.inject({ method: 'GET', url: link.json().data.url });
+    expect(file.statusCode).toBe(200);
+    expect(file.body).toContain('%PDF');
+    expect((await call(ctx, otherCookie, 'POST', `/me/interviews/${iv.id}/resume-url`)).statusCode).toBe(404);
   });
 });
