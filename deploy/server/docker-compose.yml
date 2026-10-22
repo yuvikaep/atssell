@@ -66,6 +66,18 @@ services:
       TRUST_CF_CONNECTING_IP: "on"
     ports: ["127.0.0.1:${WEB_PORT:-5010}:80"]
 
+  # RMS's own Cloudflare tunnel (rms.jobsmato.com → web), separate from the server's main tunnel, which it never touches.
+  # Started when .env has COMPOSE_PROFILES=tunnel; tunnel/ holds config.yml and the tunnel's credentials (not in git).
+  tunnel:
+    image: cloudflare/cloudflared:2026.7.3
+    container_name: rms_tunnel
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    depends_on: [web]
+    user: "${TUNNEL_UID:-1000}:${TUNNEL_GID:-1000}"
+    command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]
+    volumes: ["./tunnel:/etc/cloudflared:ro"]
+
   # Tools, not started by "up": docker compose run --rm tenant --name "Acme" --slug acme --admin-email ... --admin-name ...
   tenant:
     <<: *api-image

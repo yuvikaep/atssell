@@ -4,16 +4,15 @@ RMS runs on the JobsMato Ubuntu server as its own Docker Compose project, reache
 **https://rms.jobsmato.com** through the existing Cloudflare tunnel.
 
 ```
-Browser ─HTTPS─> Cloudflare ─tunnel─> cloudflared (server) ─> 127.0.0.1:5010 ─> rms_web (nginx: app + /api)
-                                                                                    └─> rms_api ─> rms_postgres
+Browser ─HTTPS─> Cloudflare ─"rms" tunnel─> rms_tunnel ─> rms_web (nginx: app + /api) ─> rms_api ─> rms_postgres
 ```
 
 | | |
 |---|---|
 | Folder | `/home/jobsmato/rms/app` (a clone of this repository) |
 | Compose files and secrets | `/home/jobsmato/rms/app/deploy/server/` (`.env`, `api.env`, both `chmod 600`, not in git) |
-| Containers | `rms_web`, `rms_api`, `rms_postgres` (project `rms`) |
-| Port | `127.0.0.1:5010` → `rms_web`; nothing else is published |
+| Containers | `rms_tunnel`, `rms_web`, `rms_api`, `rms_postgres` (project `rms`) |
+| Port | `127.0.0.1:5010` → `rms_web`, for checks on the server; nothing else is published |
 | Data | Docker volumes `rms_pgdata` (database) and `rms_files` (resumes, exports) |
 | Backups | `deploy/server/backups/`, nightly at 02:30 by cron, 14 days kept |
 
@@ -39,16 +38,28 @@ docker compose ps
 curl -s http://127.0.0.1:5010/health        # {"status":"ok"}
 ```
 
-### Domain
+### Domain: RMS's own tunnel
 
-1. Add to `/etc/cloudflared/config.yml`, above the final `http_status:404` line (back the file up first):
-   ```yaml
-     - hostname: rms.jobsmato.com
-       service: http://localhost:5010
-   ```
-2. `sudo systemctl restart cloudflared`. Every site on the tunnel drops for a few seconds.
-3. DNS: in Cloudflare → jobsmato.com → DNS, add a **CNAME** `rms` → `<tunnel-id>.cfargotunnel.com`, **Proxied**
-   (or `cloudflared tunnel route dns <tunnel> rms.jobsmato.com` on a machine with the account certificate).
+RMS has its own Cloudflare tunnel, run by the `rms_tunnel` container. The server's main tunnel
+(`home-server`, `/etc/cloudflared/config.yml`, which also carries SSH) is never edited or restarted for RMS.
+
+```bash
+cd /home/jobsmato/rms/app/deploy/server
+cloudflared tunnel create rms                          # uses ~/.cloudflared/cert.pem; prints the tunnel ID
+ID=<tunnel ID printed above>
+mkdir -p tunnel && cp ~/.cloudflared/$ID.json tunnel/ && chmod 700 tunnel && chmod 600 tunnel/$ID.json
+cat > tunnel/config.yml <<EOF
+tunnel: $ID
+credentials-file: /etc/cloudflared/$ID.json
+ingress:
+  - hostname: rms.jobsmato.com
+    service: http://web:80
+  - service: http_status:404
+EOF
+cloudflared tunnel route dns rms rms.jobsmato.com      # CNAME rms → <ID>.cfargotunnel.com, proxied
+echo "COMPOSE_PROFILES=tunnel" >> .env
+docker compose up -d tunnel
+```
 
 ### First company
 
@@ -92,7 +103,8 @@ curl -s https://rms.jobsmato.com/health
 ## Notes
 
 - **Visitor addresses.** `rms_web` passes Cloudflare's `CF-Connecting-IP` to the API (`TRUST_CF_CONNECTING_IP=on`),
-  so rate limits and the audit log see each visitor. This is safe only because port 5010 listens on 127.0.0.1.
+  so rate limits and the audit log see each visitor. This is safe only because rms_web is reachable just from the
+  tunnel container and from 127.0.0.1:5010.
   Do not publish it on `0.0.0.0`.
 - **Files** are stored on the `rms_files` volume (`ALLOW_LOCAL_STORAGE=true`), so they live on this one server: keep the backups.
 - **Virus scanning** is off (`SCANNER_DRIVER=none`). To turn it on, run a ClamAV container (about 1 GB of RAM) and set
