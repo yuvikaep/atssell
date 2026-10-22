@@ -144,7 +144,17 @@ function CandidateStep({ jobId, jobTitle, departmentId, department, onChangeJob,
           </select>
         </Field>
         <Field id="src-resume" label="Resume" hint={`PDF, DOC or DOCX, up to ${maxMb} MB.`} error={file && file.size > maxBytes ? `This file is larger than ${maxMb} MB.` : undefined}>
-          <input id="src-resume" type="file" accept=".pdf,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          {file ? (
+            // A wrong file can be removed or replaced before the candidate is added.
+            <div className="actions-row" style={{ alignItems: 'center' }}>
+              <span className="muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 240 }} title={file.name}>📄 {file.name}</span>
+              <label className="btn btn-sm" htmlFor="src-resume-replace">Replace</label>
+              <input id="src-resume-replace" type="file" accept=".pdf,.doc,.docx" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setFile(f); e.target.value = ''; }} />
+              <button type="button" className="btn btn-sm btn-danger" onClick={() => setFile(null)}>Remove</button>
+            </div>
+          ) : (
+            <input id="src-resume" type="file" accept=".pdf,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          )}
         </Field>
       </div>
       <div className="actions-row" style={{ marginTop: 8 }}>
