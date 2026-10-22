@@ -6,11 +6,11 @@ import { sql } from 'kysely';
 import { z } from 'zod';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
-import { withTenant } from '../db.js';
+import { withTenant, type Tx } from '../db.js';
 import { AppError, forbidden, notFound } from '../errors.js';
 import { can, requirePermission } from '../permissions.js';
 import { idParams } from './common.js';
-import { nextVacancyCode, vacancyDetail } from './vacancies.js';
+import { assertInternalActiveUser, nextVacancyCode, vacancyDetail } from './vacancies.js';
 
 const CreateJob = z
   .object({
@@ -24,6 +24,8 @@ const CreateJob = z
     salary_max: z.number().min(0).max(1_000_000_000).nullable().default(null),
     description: z.string().trim().max(10_000).default(''),
     skills: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
+    // The job's interviewers, chosen when the job is created (only they and admins sit on its panels).
+    interviewer_ids: z.array(z.uuid()).max(50).default([]),
   })
   .refine((b) => b.salary_min === null || b.salary_max === null || b.salary_max >= b.salary_min, { path: ['salary_max'], message: 'The maximum cannot be below the minimum.' });
 
@@ -39,12 +41,24 @@ const EditJob = z
     skills: z.array(z.string().trim().min(1).max(60)).max(30),
     min_experience_years: z.number().min(0).max(60).nullable(),
     max_experience_years: z.number().min(0).max(60).nullable(),
+    interviewer_ids: z.array(z.uuid()).max(50),
   })
   .partial()
   .refine((b) => b.salary_min == null || b.salary_max == null || b.salary_max >= b.salary_min, { path: ['salary_max'], message: 'The maximum cannot be below the minimum.' })
   .refine((b) => b.min_experience_years == null || b.max_experience_years == null || b.max_experience_years >= b.min_experience_years, { path: ['max_experience_years'], message: 'The maximum cannot be below the minimum.' });
 
 const CloseJob = z.object({ outcome: z.string().trim().min(1, 'Say how the job ended.').max(2000) });
+
+/** Makes the job's interviewers exactly these people (company users, active). */
+async function setInterviewers(tx: Tx, p: { tenantId: string; userId: string }, vacancyId: string, ids: string[]) {
+  const wanted = [...new Set(ids)];
+  for (const id of wanted) await assertInternalActiveUser(tx, id, 'Interviewer');
+  const current = (await tx.selectFrom('vacancy_interviewers').select('user_id').where('vacancy_id', '=', vacancyId).execute()).map((r) => r.user_id);
+  const remove = current.filter((u) => !wanted.includes(u));
+  if (remove.length) await tx.deleteFrom('vacancy_interviewers').where('vacancy_id', '=', vacancyId).where('user_id', 'in', remove).execute();
+  const add = wanted.filter((u) => !current.includes(u));
+  if (add.length) await tx.insertInto('vacancy_interviewers').values(add.map((user_id) => ({ tenant_id: p.tenantId, vacancy_id: vacancyId, user_id, assigned_by: p.userId }))).execute();
+}
 
 export async function jobRoutes(app: FastifyInstance) {
   const { db } = app;
@@ -73,6 +87,7 @@ export async function jobRoutes(app: FastifyInstance) {
       const clean = <T extends Record<string, unknown>>(o: T) => Object.fromEntries(Object.entries(o).filter(([, x]) => x !== undefined)) as Partial<T>;
       if (Object.keys(clean(vac)).length) await tx.updateTable('vacancies').set({ ...clean(vac), updated_at: sql`now()` }).where('id', '=', id).execute();
       if (Object.keys(clean(req2)).length) await tx.updateTable('requisitions').set({ ...clean(req2), updated_at: sql`now()` }).where('id', '=', v.requisition_id).execute();
+      if (body.interviewer_ids) await setInterviewers(tx, p, id, body.interviewer_ids);
       await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'job.updated', entityType: 'vacancy', entityId: id, metadata: body });
       return vacancyDetail(tx, p, id);
     }) };
@@ -100,6 +115,7 @@ export async function jobRoutes(app: FastifyInstance) {
         .values({ tenant_id: p.tenantId, requisition_id: rq.id, vacancy_code: await nextVacancyCode(tx, p.tenantId), title: body.title, location: body.location, headcount: body.openings, owner_user_id: p.userId, terms_owner: body.terms_owner })
         .returning(['id', 'vacancy_code'])
         .executeTakeFirstOrThrow();
+      await setInterviewers(tx, p, vacancy.id, body.interviewer_ids);
       await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'job.created', entityType: 'vacancy', entityId: vacancy.id, metadata: { title: body.title, openings: body.openings, requisition_id: rq.id } });
       return vacancyDetail(tx, p, vacancy.id);
     });

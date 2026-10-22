@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type VacancyDetail } from '../api';
 import { Dialog, Field, fieldError, FormError } from './ui';
+import { InterviewerPick } from './InterviewerPick';
 
 const str = (v: number | string | null | undefined) => (v === null || v === undefined ? '' : String(Number(v)));
 const num = (v: string) => (v.trim() === '' ? null : Number(v));
@@ -14,20 +15,21 @@ export function EditJobDialog({ v, onClose }: { v: VacancyDetail; onClose: () =>
     salary_min: str(v.min_ctc), salary_max: str(v.max_ctc), description: v.description ?? '', skills: (v.skills ?? []).join(', '),
     min_exp: str(v.min_experience_years), max_exp: str(v.max_experience_years),
   });
+  const [interviewers, setInterviewers] = useState<string[]>((v.interviewers ?? []).map((u) => u.id));
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   const save = useMutation({
     mutationFn: () => api('PATCH', `/jobs/${v.id}`, {
       title: f.title, location: f.location, openings: Number(f.openings), terms_owner: f.terms_owner,
       salary_min: num(f.salary_min), salary_max: num(f.salary_max), description: f.description,
       skills: f.skills.split(',').map((x) => x.trim()).filter(Boolean),
-      min_experience_years: num(f.min_exp), max_experience_years: num(f.max_exp),
+      min_experience_years: num(f.min_exp), max_experience_years: num(f.max_exp), interviewer_ids: interviewers,
     }),
     onSuccess: async () => { await Promise.all(['vacancy', 'vacancies', 'hiring-home', 'hr-dashboard'].map((k) => queryClient.invalidateQueries({ queryKey: [k] }))); onClose(); },
   });
   const err = (k: string) => fieldError(save.error, k);
   return (
     <Dialog open wide title="Edit job" onClose={onClose}
-      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={save.isPending || !f.title.trim() || !f.location.trim() || !f.openings} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : 'Save changes'}</button></>}>
+      footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={save.isPending || !f.title.trim() || !f.location.trim() || !f.openings || interviewers.length === 0} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : 'Save changes'}</button></>}>
       <FormError error={save.error && !(save.error as { details?: unknown }).details ? save.error : null} />
       <div className="form-grid">
         <div className="span-2"><Field id="ej-title" label="Job title" error={err('title')}><input id="ej-title" value={f.title} onChange={set('title')} maxLength={200} /></Field></div>
@@ -37,6 +39,7 @@ export function EditJobDialog({ v, onClose }: { v: VacancyDetail; onClose: () =>
         <Field id="ej-max" label="Salary to (₹ per year)" error={err('salary_max')}><input id="ej-max" type="number" min={0} value={f.salary_max} onChange={set('salary_max')} /></Field>
         <Field id="ej-exmin" label="Experience from (years)"><input id="ej-exmin" type="number" min={0} step="0.5" value={f.min_exp} onChange={set('min_exp')} /></Field>
         <Field id="ej-exmax" label="Experience to (years)" error={err('max_experience_years')}><input id="ej-exmax" type="number" min={0} step="0.5" value={f.max_exp} onChange={set('max_exp')} /></Field>
+        <div className="span-2"><InterviewerPick value={interviewers} onChange={setInterviewers} required /></div>
         <Field id="ej-terms" label="Who finalises salary & joining?">
           <select id="ej-terms" value={f.terms_owner} onChange={set('terms_owner')}>
             <option value="admin">Admin</option><option value="recruiter">Recruiter on this job</option><option value="interviewer">Interviewer who selects</option>

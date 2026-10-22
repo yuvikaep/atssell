@@ -88,3 +88,15 @@ describe('editing a job', () => {
     expect((await call(ctx, recruiter, 'PATCH', `/jobs/${job.id}`, { title: 'Nope' })).statusCode).toBe(403);
   });
 });
+
+describe('interviewers chosen with the job', () => {
+  it('are set when the job is created, can be changed when editing, and fill the panel list', async () => {
+    const job = await call(ctx, admin, 'POST', '/jobs', { title: 'With panel', department_id: s.eng.id, location: 'Pune', openings: 1, interviewer_ids: [s.users.engManager.id] });
+    expect(job.statusCode, job.body).toBe(201);
+    expect(job.json().data.interviewers.map((u: { id: string }) => u.id)).toEqual([s.users.engManager.id]);
+    const edited = await call(ctx, admin, 'PATCH', `/jobs/${job.json().data.id}`, { interviewer_ids: [s.users.hr1.id, s.users.hr2.id] });
+    expect(edited.json().data.interviewers.map((u: { id: string }) => u.id).sort()).toEqual([s.users.hr1.id, s.users.hr2.id].sort());
+    const bad = await call(ctx, admin, 'POST', '/jobs', { title: 'Bad panel', department_id: s.eng.id, location: 'Pune', openings: 1, interviewer_ids: ['00000000-0000-4000-8000-000000000000'] });
+    expect(bad.statusCode).toBe(422);
+  });
+});

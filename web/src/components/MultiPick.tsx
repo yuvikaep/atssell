@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 /** A dropdown of checkboxes: pick any number of people or agencies. */
-export function MultiPick({ label, options, value, onChange }: { label: string; options: { id: string; name: string }[]; value: string[]; onChange: (ids: string[]) => void }) {
+export function MultiPick({ label, options, value, onChange, placeholder }: { label: string; options: { id: string; name: string }[]; value: string[]; onChange: (ids: string[]) => void; placeholder?: string }) {
   // Closes when clicking anywhere outside, so it never covers the form below.
   const ref = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
@@ -10,7 +10,7 @@ export function MultiPick({ label, options, value, onChange }: { label: string; 
     return () => document.removeEventListener('mousedown', close);
   }, []);
   const toggle = (id: string) => onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
-  const summary = value.length === 0 ? `All ${label.toLowerCase()}` : value.length === 1 ? options.find((o) => o.id === value[0])?.name ?? '1 selected' : `${value.length} ${label.toLowerCase()}`;
+  const summary = value.length === 0 ? placeholder ?? `All ${label.toLowerCase()}` : value.length === 1 ? options.find((o) => o.id === value[0])?.name ?? '1 selected' : `${value.length} ${label.toLowerCase()}`;
   return (
     <details className="multi-pick" ref={ref}>
       <summary aria-label={label}>{summary}</summary>

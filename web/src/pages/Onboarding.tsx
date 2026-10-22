@@ -4,13 +4,14 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { generatePassword } from '../components/CreateLoginDialog';
 import { MultiPick } from '../components/MultiPick';
+import { InterviewerPick } from '../components/InterviewerPick';
 import { Field, fieldError, FormError } from '../components/ui';
 import { agenciesQuery, departmentsQuery, usersQuery, vacanciesQuery } from '../queries';
 
-const STEPS = ['Departments', 'Jobs', 'Recruiters', 'Agencies'] as const;
+const STEPS = ['Departments', 'Interviewers', 'Jobs', 'Recruiters', 'Agencies'] as const;
 
 /**
- * First-time setup for a new company, in four short steps: departments, jobs, recruiters, agencies.
+ * First-time setup for a new company: departments, interviewers, jobs (with their interviewers), recruiters, agencies.
  * Each step can be skipped; everything can be added or changed later from its own page.
  */
 export function OnboardingPage() {
@@ -18,7 +19,7 @@ export function OnboardingPage() {
   const done = step >= STEPS.length;
   return (
     <>
-      <div className="page-header"><div><h1>Set up your company</h1><p>Four quick steps. Skip anything you are not ready for; you can add more later from each page.</p></div></div>
+      <div className="page-header"><div><h1>Set up your company</h1><p>Five quick steps. Skip anything you are not ready for; you can add more later from each page.</p></div></div>
       <ol className="steps" aria-label="Setup steps">
         {STEPS.map((s, i) => (
           <li key={s} data-active={i === step} data-done={i < step}>
@@ -27,9 +28,10 @@ export function OnboardingPage() {
         ))}
       </ol>
       {step === 0 && <DepartmentsStep />}
-      {step === 1 && <JobsStep />}
-      {step === 2 && <RecruitersStep />}
-      {step === 3 && <AgenciesStep />}
+      {step === 1 && <InterviewersStep />}
+      {step === 2 && <JobsStep />}
+      {step === 3 && <RecruitersStep />}
+      {step === 4 && <AgenciesStep />}
       {done ? (
         <div className="card section sourcing-done" role="status">
           <h2>You are set up</h2>
@@ -93,10 +95,11 @@ function JobsStep() {
   const refresh = useRefresh();
   const empty = { title: '', department_id: '', location: '', openings: '1', terms_owner: 'admin' };
   const [f, setF] = useState(empty);
+  const [interviewers, setInterviewers] = useState<string[]>([]);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   const add = useMutation({
-    mutationFn: () => api('POST', '/jobs', { title: f.title, department_id: f.department_id, location: f.location, openings: Number(f.openings), terms_owner: f.terms_owner, salary_min: null, salary_max: null, description: '' }),
-    onSuccess: async () => { setF((x) => ({ ...empty, department_id: x.department_id })); await refresh(); },
+    mutationFn: () => api('POST', '/jobs', { title: f.title, department_id: f.department_id, location: f.location, openings: Number(f.openings), terms_owner: f.terms_owner, interviewer_ids: interviewers, salary_min: null, salary_max: null, description: '' }),
+    onSuccess: async () => { setF((x) => ({ ...empty, department_id: x.department_id })); setInterviewers([]); await refresh(); },
   });
   const submit = (e: FormEvent) => { e.preventDefault(); add.mutate(); };
   return (
@@ -114,7 +117,8 @@ function JobsStep() {
               <select id="ob-terms" value={f.terms_owner} onChange={set('terms_owner')}><option value="admin">Admin</option><option value="recruiter">Recruiter on this job</option><option value="interviewer">Interviewer who selects</option></select>
             </Field>
           </div>
-          <button className="btn btn-primary" type="submit" disabled={add.isPending || !f.title.trim() || !f.department_id || !f.location.trim() || !f.openings}>Add job</button>
+          <InterviewerPick value={interviewers} onChange={setInterviewers} required />
+          <button className="btn btn-primary" type="submit" disabled={add.isPending || !f.title.trim() || !f.department_id || !f.location.trim() || !f.openings || interviewers.length === 0}>Add job</button>
         </form>
       )}
     </StepCard>
@@ -130,6 +134,41 @@ function Credentials({ text }: { text: string }) {
       <textarea readOnly rows={4} value={text} style={{ width: '100%' }} onFocus={(e) => e.target.select()} />
       <button className="btn btn-sm" type="button" onClick={async () => { await navigator.clipboard?.writeText(text); setCopied(true); }}>{copied ? 'Copied' : 'Copy details'}</button>
     </div>
+  );
+}
+
+function InterviewersStep() {
+  const users = useQuery(usersQuery('active', ''));
+  const departments = useQuery(departmentsQuery('active'));
+  const refresh = useRefresh();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [created, setCreated] = useState<string | null>(null);
+  const add = useMutation({
+    mutationFn: async () => {
+      const password = generatePassword();
+      await api('POST', '/users', { full_name: name, email, password, role_code: 'interviewer', department_id: departmentId || null });
+      return `Login: ${window.location.origin}/login\nEmail: ${email}\nPassword: ${password}\n(Change your password after signing in.)`;
+    },
+    onSuccess: async (text) => { setCreated(text); setName(''); setEmail(''); await refresh(); },
+  });
+  const submit = (e: FormEvent) => { e.preventDefault(); setCreated(null); add.mutate(); };
+  const interviewers = (users.data?.data ?? []).filter((u) => u.roles.some((r) => r.code === 'interviewer'));
+  return (
+    <StepCard title="Interviewers" help="People who interview and decide (e.g. department heads). You pick them for each job in the next step; you can also interview yourself."
+      added={<List items={interviewers.map((u) => `${u.full_name} · ${u.email}`)} empty="No interviewers yet." />}>
+      <form onSubmit={submit} noValidate>
+        <FormError error={add.error && !fieldError(add.error, 'email') ? add.error : null} />
+        <Field id="ob-in" label="Name"><input id="ob-in" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
+        <Field id="ob-ie" label="Email (they sign in with this)" error={fieldError(add.error, 'email')}><input id="ob-ie" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" /></Field>
+        <Field id="ob-id" label="Department (optional)">
+          <select id="ob-id" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}><option value="">Company-wide</option>{(departments.data ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+        </Field>
+        <button className="btn btn-primary" type="submit" disabled={add.isPending || !name.trim() || !email.trim()}>{add.isPending ? 'Adding…' : 'Add interviewer'}</button>
+      </form>
+      {created && <Credentials text={created} />}
+    </StepCard>
   );
 }
 

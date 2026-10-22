@@ -76,7 +76,7 @@ async function allocatedHeadcount(tx: Tx, requisitionId: string, excludeVacancyI
   return (await q.executeTakeFirstOrThrow()).n;
 }
 
-async function assertInternalActiveUser(tx: Tx, userId: string, what: string) {
+export async function assertInternalActiveUser(tx: Tx, userId: string, what: string) {
   const u = await tx
     .selectFrom('users as u')
     .leftJoin('agency_members as am', 'am.user_id', 'u.id')
