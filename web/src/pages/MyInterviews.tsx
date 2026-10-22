@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { StatusCounts } from '../components/StatusCounts';
-import { api, ApiError, type MyInterviewDetail, formatInZone, INTERVIEW_STATUS_LABEL, MODE_LABEL, RECOMMENDATION_LABEL, type MyInterviewRow } from '../api';
+import { api, ApiError, type MyInterviewDetail, formatInZone, INTERVIEW_STATUS_LABEL, MODE_LABEL, RECOMMENDATION_LABEL, type MyInterviewRow, viewFile } from '../api';
 import { FeedbackForm, type FeedbackValues } from '../components/FeedbackForm';
 import { RemarkBanner } from '../components/RemarkBanner';
 import { NextRoundDialog } from '../components/NextRoundDialog';
@@ -187,9 +187,7 @@ function YourDecision({ d }: { d: MyInterviewDetail }) {
 /** The candidate's latest resume for this interviewer (a short-lived signed link). */
 function ViewResume({ interviewId }: { interviewId: string }) {
   const open = useMutation({
-    mutationFn: () => api<{ data: { url: string } }>('POST', `/me/interviews/${interviewId}/resume-url`),
-    // The file downloads (it is sent as an attachment), so the page stays put.
-    onSuccess: (res) => window.location.assign(res.data.url),
+    mutationFn: () => viewFile(() => api<{ data: { url: string } }>('POST', `/me/interviews/${interviewId}/resume-url`).then((x) => x.data.url)),
   });
   return <button className="btn btn-sm" disabled={open.isPending} onClick={() => open.mutate()}>{open.isPending ? 'Opening…' : 'View resume'}</button>;
 }

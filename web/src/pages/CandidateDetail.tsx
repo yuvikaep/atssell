@@ -2,8 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useDeferredValue, useRef, useState, type FormEvent } from 'react';
 import {
-  api, ApiError, can, formatBytes, formatInr, formatInZone, INTERVIEW_STATUS_LABEL, SOURCE_LABEL, upload, type CandidateProfile, type CandidateRow, type Paged,
-} from '../api';
+  api, ApiError, can, formatBytes, formatInr, formatInZone, INTERVIEW_STATUS_LABEL, SOURCE_LABEL, upload, type CandidateProfile, type CandidateRow, type Paged, viewFile } from '../api';
 import { useMe } from '../components/AppShell';
 import { ScheduleDialog } from '../components/ScheduleDialog';
 import { CandidateFormFields, candidateBody, formFromCandidate, type CandidateForm } from '../components/CandidateForm';
@@ -169,9 +168,7 @@ function Resumes({ c }: { c: CandidateProfile }) {
     onSuccess: refresh,
   });
   const download = useMutation({
-    mutationFn: (docId: string) => api<{ data: { url: string } }>('POST', `/candidates/${c.id}/documents/${docId}/download-url`),
-    // The link is signed and expires in minutes; the response is an attachment, so the page stays put.
-    onSuccess: (res) => window.location.assign(res.data.url),
+    mutationFn: (docId: string) => viewFile(() => api<{ data: { url: string } }>('POST', `/candidates/${c.id}/documents/${docId}/download-url`).then((x) => x.data.url)),
   });
 
   return (

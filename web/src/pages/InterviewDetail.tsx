@@ -200,7 +200,7 @@ function AddPanelDialog({ interview, onClose, onAdded }: { interview: InterviewD
     <Dialog open wide title="Add interviewers" onClose={onClose}
       footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" onClick={() => add.mutate()} disabled={add.isPending || draft.length === 0}>Add to panel</button></>}>
       <FormError error={add.error} />
-      <PanelPicker panel={draft} onChange={setDraft} exclude={interview.panel.map((p) => p.user_id).filter((x): x is string => !!x)} />
+      <PanelPicker panel={draft} onChange={setDraft} applicationId={interview.application_id} exclude={interview.panel.map((p) => p.user_id).filter((x): x is string => !!x)} />
     </Dialog>
   );
 }

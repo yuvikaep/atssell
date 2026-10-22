@@ -3,7 +3,7 @@ import { canExport, ExportButton } from '../components/ExportButton';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { api } from '../api';
+import { api, viewFile } from '../api';
 import { EmptyState, ErrorState, FormError, formatDate, Loading, Pager, IdTags } from '../components/ui';
 import { portalSubmissionsQuery } from '../queries';
 import { OwnershipBadge } from './Portal';
@@ -13,9 +13,7 @@ export function PortalSubmissionsPage() {
   const list = useQuery(portalSubmissionsQuery({ page }));
   const me = useMe();
   const download = useMutation({
-    mutationFn: (id: string) => api<{ data: { url: string } }>('POST', `/agency/submissions/${id}/resume-url`),
-    // A signed, short-lived link; the response is an attachment so the page stays put.
-    onSuccess: (res) => window.location.assign(res.data.url),
+    mutationFn: (id: string) => viewFile(() => api<{ data: { url: string } }>('POST', `/agency/submissions/${id}/resume-url`).then((x) => x.data.url)),
   });
 
   return (

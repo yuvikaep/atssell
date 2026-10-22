@@ -158,6 +158,11 @@ export const plansQuery = (vacancyId: string) => ({
   queryKey: ['plans', vacancyId],
   queryFn: () => api<{ data: InterviewPlan[] }>('GET', `/vacancies/${vacancyId}/interview-plans`).then((r) => r.data),
 });
+/** Who can sit on a panel for this candidate's job: its interviewers and the company admins. */
+export const panelOptionsQuery = (applicationId: string) => ({
+  queryKey: ['panel-options', applicationId],
+  queryFn: () => api<{ data: (DirectoryUser & { kind: 'interviewer' | 'admin' })[] }>('GET', `/applications/${applicationId}/panel-options`).then((r) => r.data),
+});
 export const directoryQuery = {
   queryKey: ['directory'],
   queryFn: () => api<{ data: DirectoryUser[] }>('GET', '/directory/users').then((r) => r.data),

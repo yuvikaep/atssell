@@ -535,9 +535,12 @@ export async function fileRoutes(app: FastifyInstance) {
     if (!doc || doc.scan_status !== 'clean') throw new AppError(410, 'LINK_INVALID', 'This download link is invalid or has expired.');
     const data = await app.storage.get(doc.storage_key);
     const asciiName = doc.original_filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+    // ?view=1 opens a PDF in the browser's viewer instead of downloading it. Word files cannot be
+    // shown by browsers, so they still download.
+    const view = (req.query as { view?: string }).view === '1' && doc.mime_type === 'application/pdf';
     return reply
       .header('content-type', doc.mime_type)
-      .header('content-disposition', `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(doc.original_filename)}`)
+      .header('content-disposition', `${view ? 'inline' : 'attachment'}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(doc.original_filename)}`)
       .header('x-content-type-options', 'nosniff')
       .header('cache-control', 'private, no-store')
       .send(data);

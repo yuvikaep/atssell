@@ -131,6 +131,14 @@ export async function vacancyDetail(tx: Tx, p: Principal, id: string) {
     .orderBy('u.full_name')
     .execute();
 
+  const interviewers = await tx
+    .selectFrom('vacancy_interviewers as vi')
+    .innerJoin('users as u', 'u.id', 'vi.user_id')
+    .select(['u.id', 'u.full_name', 'u.email', 'vi.assigned_at'])
+    .where('vi.vacancy_id', '=', id)
+    .orderBy('u.full_name')
+    .execute();
+
   // Agency users never see which other agencies work on a vacancy.
   const agencies = agencyId
     ? []
@@ -159,6 +167,7 @@ export async function vacancyDetail(tx: Tx, p: Principal, id: string) {
     ...(budget ? { min_ctc, max_ctc } : {}),
     age_days: Math.floor((Date.now() - v.opened_at.getTime()) / 86_400_000),
     recruiters,
+    interviewers,
     agencies,
     stage_counts: stageCounts,
     can: {
@@ -357,6 +366,37 @@ export async function vacancyRoutes(app: FastifyInstance) {
         tenantId: p.tenantId, actorUserId: p.userId, action: 'vacancy.recruiter_assigned', entityType: 'vacancy', entityId: id,
         metadata: { user_id },
       });
+      return vacancyDetail(tx, p, id);
+    });
+    return { data: detail };
+  });
+
+  // Interviewers this job uses (company people, not agency members).
+  app.post('/vacancies/:id/assign-interviewer', async (req) => {
+    const p = principal(req);
+    const { id } = idParams.parse(req.params);
+    const { user_id } = UserBody.parse(req.body);
+    const detail = await withTenant(db, p.tenantId, async (tx) => {
+      const v = await loadVacancy(tx, p, id, true);
+      requirePermission(p, 'vacancies.manage', v.department_id);
+      await assertInternalActiveUser(tx, user_id, 'Interviewer');
+      await tx.insertInto('vacancy_interviewers').values({ tenant_id: p.tenantId, vacancy_id: id, user_id, assigned_by: p.userId }).execute()
+        .catch((err: unknown) => { throw pgErrorCode(err) === '23505' ? new AppError(409, 'ALREADY_ASSIGNED', 'This interviewer is already assigned.') : err; });
+      await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'vacancy.interviewer_assigned', entityType: 'vacancy', entityId: id, metadata: { user_id } });
+      return vacancyDetail(tx, p, id);
+    });
+    return { data: detail };
+  });
+
+  app.post('/vacancies/:id/unassign-interviewer', async (req) => {
+    const p = principal(req);
+    const { id } = idParams.parse(req.params);
+    const { user_id } = UserBody.parse(req.body);
+    const detail = await withTenant(db, p.tenantId, async (tx) => {
+      const v = await loadVacancy(tx, p, id, true);
+      requirePermission(p, 'vacancies.manage', v.department_id);
+      await tx.deleteFrom('vacancy_interviewers').where('vacancy_id', '=', id).where('user_id', '=', user_id).execute();
+      await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'vacancy.interviewer_unassigned', entityType: 'vacancy', entityId: id, metadata: { user_id } });
       return vacancyDetail(tx, p, id);
     });
     return { data: detail };

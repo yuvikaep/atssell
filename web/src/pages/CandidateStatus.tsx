@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useState } from 'react';
 import { Link, useSearch } from '@tanstack/react-router';
 import { StatusCounts } from '../components/StatusCounts';
-import { api, upload, formatInZone, RECOMMENDATION_LABEL, type CandidateStatusRow, type Recommendation } from '../api';
+import { api, upload, formatInZone, RECOMMENDATION_LABEL, type CandidateStatusRow, type Recommendation, viewFile } from '../api';
 import { ScheduleDialog } from '../components/ScheduleDialog';
 import { SetTimeDialog } from '../components/SetTimeDialog';
 import { Badge, Dialog, IdTags, EmptyState, ErrorState, Field, FormError, Loading } from '../components/ui';
@@ -148,9 +148,7 @@ function AnotherJobDialog({ row, jobs, onClose }: { row: CandidateStatusRow; job
 /** Opens the latest resume, or uploads one when the candidate has none yet (an existing resume is not replaced here). */
 function ResumeButton({ r, onUploaded }: { r: CandidateStatusRow; onUploaded: () => unknown }) {
   const open = useMutation({
-    mutationFn: () => api<{ data: { url: string } }>('POST', `/candidates/${r.candidate_id}/documents/${r.resume_document_id}/download-url`),
-    // The file downloads (it is sent as an attachment), so the page stays put.
-    onSuccess: (res) => window.location.assign(res.data.url),
+    mutationFn: () => viewFile(() => api<{ data: { url: string } }>('POST', `/candidates/${r.candidate_id}/documents/${r.resume_document_id}/download-url`).then((x) => x.data.url)),
   });
   const send = useMutation({
     mutationFn: (file: File) => upload(`/candidates/${r.candidate_id}/documents`, file, { document_type: 'resume' }),

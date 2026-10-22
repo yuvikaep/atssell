@@ -708,6 +708,7 @@ export interface Database {
   tenant_counters: TenantCountersTable;
   job_roles: JobRolesTable;
   joining_terms: JoiningTermsTable;
+  vacancy_interviewers: VacancyInterviewersTable;
   interview_plans: InterviewPlansTable;
   interviews: InterviewsTable;
   interviewers: InterviewersTable;
@@ -752,4 +753,13 @@ export interface JoiningTermsTable {
   proposed_at: Generated<Date>;
   approved_by: string | null;
   approved_at: Date | null;
+}
+
+export interface VacancyInterviewersTable {
+  id: Generated<string>;
+  tenant_id: string;
+  vacancy_id: string;
+  user_id: string;
+  assigned_by: string;
+  assigned_at: Generated<Date>;
 }

@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type DirectoryUser } from '../api';
-import { directoryQuery } from '../queries';
+import { panelOptionsQuery } from '../queries';
 import { Dialog, ErrorState, Field, fieldError, FormError, Loading } from './ui';
 
 /** Send a candidate to the next round: pick who should interview and leave a remark the recruiter will see too. */
 export function NextRoundDialog({ applicationId, candidateName, onClose }: { applicationId: string; candidateName: string; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const directory = useQuery(directoryQuery);
+  const directory = useQuery(panelOptionsQuery(applicationId));
   const [round, setRound] = useState('Next round');
   const [chosen, setChosen] = useState<string[]>([]);
   const [remark, setRemark] = useState('');

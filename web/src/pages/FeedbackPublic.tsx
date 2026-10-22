@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { api, ApiError, formatInZone, takeFragmentToken, type FeedbackBootstrap } from '../api';
+import { api, ApiError, formatInZone, takeFragmentToken, type FeedbackBootstrap, viewFile } from '../api';
 import { FeedbackForm, type FeedbackValues } from '../components/FeedbackForm';
 
 // The public page for interviewers who have no account. It shows no company navigation, loads no
@@ -47,8 +47,7 @@ export function FeedbackPublicPage() {
     onSuccess: () => setSent(true),
   });
   const resume = useMutation({
-    mutationFn: () => api<{ data: { url: string } }>('POST', '/public/feedback/resume-url', { token }),
-    onSuccess: (r) => window.location.assign(r.data.url),
+    mutationFn: () => viewFile(() => api<{ data: { url: string } }>('POST', '/public/feedback/resume-url', { token }).then((x) => x.data.url)),
   });
 
   if (!token) return <Shell><Problem p={{ title: 'This link is not valid', text: 'Please open the link from your email again.' }} /></Shell>;

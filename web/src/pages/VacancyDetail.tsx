@@ -107,6 +107,7 @@ function Overview({ v }: { v: VacancyDetail }) {
       </div>
       <div className="stack">
         <Recruiters v={v} />
+        <Interviewers v={v} />
         <Agencies v={v} />
         {sees && <InterviewRounds vacancyId={v.id} canManage={can(me, 'interviews.manage')} />}
       </div>
@@ -157,6 +158,49 @@ function Recruiters({ v }: { v: VacancyDetail }) {
       {v.can.manage && canListUsers && (
         <Field id="add-recruiter" label="Assign a recruiter">
           <select id="add-recruiter" value={picking} disabled={assign.isPending} onChange={(e) => { setPicking(e.target.value); if (e.target.value) assign.mutate(e.target.value); }}>
+            <option value="">Choose a person</option>
+            {candidates.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </select>
+        </Field>
+      )}
+    </div>
+  );
+}
+
+function Interviewers({ v }: { v: VacancyDetail }) {
+  const me = useMe();
+  const refresh = useVacancyRefresh(v.id);
+  const [picking, setPicking] = useState('');
+  const canListUsers = canAll(me, 'users.manage');
+  const users = useQuery({ ...usersQuery('active', ''), enabled: v.can.manage && canListUsers });
+  const assign = useMutation({
+    mutationFn: (user_id: string) => api('POST', `/vacancies/${v.id}/assign-interviewer`, { user_id }),
+    onSuccess: async () => { setPicking(''); await refresh(); },
+  });
+  const unassign = useMutation({
+    mutationFn: (user_id: string) => api('POST', `/vacancies/${v.id}/unassign-interviewer`, { user_id }),
+    onSuccess: refresh,
+  });
+  const assignedIds = new Set((v.interviewers ?? []).map((r) => r.id));
+  const candidates = (users.data?.data ?? []).filter((u) => !assignedIds.has(u.id) && !u.roles.some((r) => r.code.startsWith('agency')));
+
+  return (
+    <div className="card section">
+      <h2>Interviewers</h2>
+      <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>Only these people (and company admins) can be put on this job's interview panels.</p>
+      <FormError error={assign.error ?? unassign.error} />
+      {(v.interviewers ?? []).length === 0 ? <p className="empty-inline">No interviewers assigned.</p> : (
+        <ul className="chips" style={{ listStyle: 'none', padding: 0, margin: '0 0 10px' }}>
+          {(v.interviewers ?? []).map((r) => (
+            <li className="chip" key={r.id}>{r.full_name}
+              {v.can.manage && <button aria-label={`Unassign ${r.full_name}`} onClick={() => unassign.mutate(r.id)}>×</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {v.can.manage && canListUsers && (
+        <Field id="add-interviewer" label="Assign an interviewer">
+          <select id="add-interviewer" value={picking} disabled={assign.isPending} onChange={(e) => { setPicking(e.target.value); if (e.target.value) assign.mutate(e.target.value); }}>
             <option value="">Choose a person</option>
             {candidates.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
           </select>

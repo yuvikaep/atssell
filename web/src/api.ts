@@ -217,6 +217,7 @@ export interface VacancyDetail extends Omit<VacancyRow, 'recruiters' | 'agencies
 
 export interface VacancyPeople {
   recruiters: { id: string; full_name: string; email: string }[];
+  interviewers?: { id: string; full_name: string; email: string }[];
   agencies: { id: string; name: string; ownership_policy?: { submission_notes?: string } }[];
 }
 
@@ -681,4 +682,19 @@ export interface CandidateStatusRow {
   feedback: { count: number; avg_rating: number; recommendations: string[] } | null;
   remark: string | null;
   action: { kind: 'schedule' } | { kind: 'set_time'; interview_id: string } | null;
+}
+
+/**
+ * Opens a signed file link in a new tab for viewing (PDFs show in the browser; Word files download).
+ * The tab is opened during the click, before the link is fetched, so pop-up blockers allow it.
+ */
+export function viewFile(getUrl: () => Promise<string>) {
+  const tab = window.open('', '_blank');
+  return getUrl().then(
+    (url) => {
+      const view = `${url}${url.includes('?') ? '&' : '?'}view=1`;
+      if (tab) { tab.opener = null; tab.location.href = view; } else window.location.assign(view);
+    },
+    (err) => { tab?.close(); throw err; },
+  );
 }

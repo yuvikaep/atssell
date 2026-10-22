@@ -260,6 +260,25 @@ export async function interviewRoutes(app: FastifyInstance) {
     return { data: rows };
   });
 
+  // Who can be put on a panel for this candidate's job: the job's assigned interviewers and the
+  // company admins. Open to people who schedule interviews and to an interviewer requesting a next round.
+  app.get('/applications/:id/panel-options', async (req) => {
+    const p = principal(req);
+    const { id } = idParams.parse(req.params);
+    const rows = await withTenant(db, p.tenantId, async (tx) => {
+      if (!hasAny(p, 'interviews.manage') && !(await interviewedApplication(tx, p.userId, id))) throw forbidden();
+      const app0 = await tx.selectFrom('applications').select('vacancy_id').where('id', '=', id).executeTakeFirst();
+      if (!app0) throw notFound('Application');
+      const assigned = await tx.selectFrom('vacancy_interviewers as vi').innerJoin('users as u', 'u.id', 'vi.user_id')
+        .select(['u.id', 'u.full_name', 'u.email']).where('vi.vacancy_id', '=', app0.vacancy_id).where('u.status', '=', 'active').orderBy('u.full_name').execute();
+      const admins = await tx.selectFrom('user_role_assignments as ura').innerJoin('roles as r', 'r.id', 'ura.role_id').innerJoin('users as u', 'u.id', 'ura.user_id')
+        .select(['u.id', 'u.full_name', 'u.email']).where('r.code', '=', 'company_admin').where('u.status', '=', 'active').distinct().orderBy('u.full_name').execute();
+      const seen = new Set(assigned.map((u) => u.id));
+      return [...assigned.map((u) => ({ ...u, kind: 'interviewer' as const })), ...admins.filter((u) => !seen.has(u.id)).map((u) => ({ ...u, kind: 'admin' as const }))];
+    });
+    return { data: rows };
+  });
+
   // ---- Scorecard plans (one per round of a vacancy) ------------------------
 
   async function loadVacancyForPlans(tx: Tx, p: Principal, vacancyId: string) {

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { api, COMMON_TIMEZONES, isoToZoned, MODE_LABEL, zonedToIso, type DirectoryUser, type InterviewDetail, type InterviewMode } from '../api';
-import { directoryQuery, plansQuery } from '../queries';
+import { panelOptionsQuery, plansQuery } from '../queries';
 import { Dialog, Field, fieldError, FormError } from './ui';
 
 export interface PanelDraft {
@@ -20,12 +20,14 @@ const defaultStart = (tz: string) => {
 const addHour = (local: string, tz: string, hours: number) => isoToZoned(new Date(new Date(zonedToIso(local, tz)).getTime() + hours * 3_600_000).toISOString(), tz);
 
 /** Panel chips plus the controls to add a colleague or an external interviewer. */
-export function PanelPicker({ panel, onChange, exclude = [] }: { panel: PanelDraft[]; onChange: (p: PanelDraft[]) => void; exclude?: string[] }) {
-  const directory = useQuery(directoryQuery);
+export function PanelPicker({ panel, onChange, exclude = [], applicationId }: { panel: PanelDraft[]; onChange: (p: PanelDraft[]) => void; exclude?: string[]; applicationId: string }) {
+  // Only the job's interviewers and the company admins can be put on the panel.
+  const directory = useQuery(panelOptionsQuery(applicationId));
   const [colleague, setColleague] = useState('');
   const [ext, setExt] = useState({ name: '', email: '' });
   const taken = new Set([...panel.map((p) => p.user_id).filter(Boolean), ...exclude]);
-  const options = (directory.data ?? []).filter((u: DirectoryUser) => !taken.has(u.id));
+  const options = (directory.data ?? []).filter((u) => !taken.has(u.id));
+  const noInterviewers = !!directory.data && !directory.data.some((u) => u.kind === 'interviewer');
 
   return (
     <div>
@@ -43,8 +45,9 @@ export function PanelPicker({ panel, onChange, exclude = [] }: { panel: PanelDra
             if (u) { onChange([...panel, { key: `u:${u.id}`, label: u.full_name, user_id: u.id }]); setColleague(''); }
           }}>
             <option value="">{directory.isPending ? 'Loading…' : 'Choose a colleague'}</option>
-            {options.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            {options.map((u) => <option key={u.id} value={u.id}>{u.full_name}{u.kind === 'admin' ? ' (admin)' : ''}</option>)}
           </select>
+          {noInterviewers && <span className="hint">No interviewers are assigned to this job yet. The admin adds them on the job page (Overview &amp; assignments).</span>}
         </Field>
         <div>
           <label className="muted" style={{ fontSize: 13, fontWeight: 550 }}>Or an external interviewer</label>
@@ -191,7 +194,7 @@ export function ScheduleDialog({ applicationId, vacancyId, interview, onClose }:
         {!editing && (
           <>
             <h2 style={{ fontSize: 14, margin: '8px 0 10px' }}>Panel</h2>
-            <PanelPicker panel={panel} onChange={setPanel} />
+            <PanelPicker panel={panel} onChange={setPanel} applicationId={applicationId!} />
             {fieldError(save.error, 'panel') && <span className="field-error" style={{ color: 'var(--danger)' }}>{fieldError(save.error, 'panel')}</span>}
           </>
         )}

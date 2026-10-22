@@ -152,3 +152,22 @@ describe('resumes for recruiters and interviewers', () => {
     expect((await call(ctx, otherCookie, 'POST', `/me/interviews/${iv.id}/resume-url`)).statusCode).toBe(404);
   });
 });
+
+describe('job interviewers and panels', () => {
+  it('offers only the job interviewers and admins for a panel, and PDFs can be viewed in the browser', async () => {
+    const a = await assigned('iiiiiiiii');
+    const opts0 = (await call(ctx, recruiter, 'GET', `/applications/${a.applicationId}/panel-options`)).json().data;
+    expect(opts0.every((u: { kind: string }) => u.kind === 'admin')).toBe(true);
+    expect((await call(ctx, admin, 'POST', `/vacancies/${a.vacancyId}/assign-interviewer`, { user_id: s.users.engManager.id })).statusCode).toBe(200);
+    const opts = (await call(ctx, recruiter, 'GET', `/applications/${a.applicationId}/panel-options`)).json().data;
+    expect(opts.find((u: { id: string }) => u.id === s.users.engManager.id)?.kind).toBe('interviewer');
+    expect(opts.some((u: { id: string }) => u.id === s.users.hr1.id)).toBe(false);
+    expect((await call(ctx, recruiter, 'POST', `/vacancies/${a.vacancyId}/assign-interviewer`, { user_id: s.users.hr1.id })).statusCode).toBe(403);
+
+    expect((await uploadDocument(ctx, recruiter, a.candidateId, 'cv.pdf', PDF('view'))).statusCode).toBe(201);
+    const row = (await call(ctx, recruiter, 'GET', '/candidate-status')).json().data.find((r: { application_id: string }) => r.application_id === a.applicationId);
+    const link = (await call(ctx, recruiter, 'POST', `/candidates/${a.candidateId}/documents/${row.resume_document_id}/download-url`)).json().data.url;
+    expect((await ctx.app.inject({ method: 'GET', url: `${link}?view=1` })).headers['content-disposition']).toMatch(/^inline/);
+    expect((await ctx.app.inject({ method: 'GET', url: link })).headers['content-disposition']).toMatch(/^attachment/);
+  });
+});
