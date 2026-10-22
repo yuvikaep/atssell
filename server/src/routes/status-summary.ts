@@ -1,9 +1,9 @@
 // The plain counts each person sees (sourced, interview, selected, rejected, joined, backout…) over the
 // candidates they work with, and the one step after selection: the candidate backed out.
 import type { FastifyInstance } from 'fastify';
-import { sql } from 'kysely';
+import { sql, type Expression, type ExpressionBuilder, type SqlBool } from 'kysely';
 import { z } from 'zod';
-import { agencyIdOf, hasAny, vacancyVisible } from '../access.js';
+import { agencyIdOf, hasAny, vacancyVisible, applicationSourcedBy } from '../access.js';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
 import { withTenant } from '../db.js';
@@ -12,6 +12,18 @@ import { can } from '../permissions.js';
 import { stageByCode } from '../pipeline.js';
 import { SIMPLE_STATUSES, simpleStatusSql } from '../simple-status.js';
 import { idParams } from './common.js';
+import { signFileToken } from '../storage.js';
+
+/** For `applications as a`: what an interviewer works with. */
+export function interviewerSees(userId: string) {
+  // Loosely typed like access.ts helpers: used on queries that alias applications as `a`.
+  return (eb: ExpressionBuilder<any, any>): Expression<SqlBool> => eb.or([
+    eb.exists(eb.selectFrom('vacancy_interviewers as vi').select('vi.id').whereRef('vi.vacancy_id', '=', 'a.vacancy_id').where('vi.user_id', '=', userId)),
+    eb.exists(eb.selectFrom('interviewers as m').innerJoin('interviews as i', 'i.id', 'm.interview_id').select('m.id').whereRef('i.application_id', '=', 'a.id').where('m.user_id', '=', userId)),
+    eb.exists(eb.selectFrom('vacancies as hv').innerJoin('requisitions as hrq', 'hrq.id', 'hv.requisition_id').innerJoin('departments as hd', 'hd.id', 'hrq.department_id')
+      .select('hv.id').whereRef('hv.id', '=', 'a.vacancy_id').where('hd.head_user_id', '=', userId)),
+  ]);
+}
 
 export async function statusSummaryRoutes(app: FastifyInstance) {
   const { db } = app;
@@ -30,11 +42,10 @@ export async function statusSummaryRoutes(app: FastifyInstance) {
         q = q.where((eb) => eb.exists(eb.selectFrom('submissions as sb').select('sb.id').whereRef('sb.application_id', '=', 'a.id')
           .where('sb.agency_id', '=', agencyId).$if(!admin, (s) => s.where('sb.source_user_id', '=', p.userId))));
       } else if (hasAny(p, 'candidates.view')) {
-        q = q.innerJoin('vacancies as v', 'v.id', 'a.vacancy_id').innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id').where(vacancyVisible(p, null));
+        q = q.innerJoin('vacancies as v', 'v.id', 'a.vacancy_id').innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id').where(vacancyVisible(p, null)).where(applicationSourcedBy(p));
       } else {
-        // An interviewer: the candidates they interviewed.
-        q = q.where((eb) => eb.exists(eb.selectFrom('interviewers as m').innerJoin('interviews as i', 'i.id', 'm.interview_id').select('m.id')
-          .whereRef('i.application_id', '=', 'a.id').where('m.user_id', '=', p.userId)));
+        // An interviewer: candidates on their jobs, ones they interviewed, and their departments' (as head).
+        q = q.where(interviewerSees(p.userId));
       }
       if (f.vacancy_id) q = q.where('a.vacancy_id', '=', f.vacancy_id);
       const rows = await q.execute();
@@ -52,6 +63,48 @@ export async function statusSummaryRoutes(app: FastifyInstance) {
     const by = Object.fromEntries(SIMPLE_STATUSES.map((s) => [s, 0])) as Record<string, number>;
     for (const r of counts.rows) by[r.s] = r.n;
     return { data: { ...by, total: counts.rows.reduce((n, r) => n + r.n, 0), job: counts.job } };
+  });
+
+  // An interviewer's (or department head's) candidates: everyone sourced for their jobs, by a recruiter
+  // or an agency, before or after an interview. Read-only, with the resume.
+  app.get('/my-job-candidates', async (req) => {
+    const p = principal(req);
+    const f = z.object({ status: z.enum(SIMPLE_STATUSES).optional(), q: z.string().trim().max(100).optional() }).parse(req.query);
+    const rows = await withTenant(db, p.tenantId, async (tx) => {
+      let q = tx.selectFrom('applications as a')
+        .innerJoin('candidates as c', 'c.id', 'a.candidate_id')
+        .innerJoin('vacancies as v', 'v.id', 'a.vacancy_id')
+        .leftJoin('submissions as sb', (j) => j.onRef('sb.application_id', '=', 'a.id').on('sb.ownership_state', '=', 'accepted'))
+        .leftJoin('agencies as ag', 'ag.id', 'sb.agency_id')
+        .leftJoin('users as su', 'su.id', 'sb.source_user_id')
+        .select([simpleStatusSql('a').as('simple_status'), 'a.id as application_id', 'a.sourcing_code', 'a.temp_employee_code', 'a.created_at',
+          'c.id as candidate_id', 'c.full_name', 'c.current_title', 'c.city', 'c.total_experience_years', 'v.id as vacancy_id', 'v.title as job_title',
+          'ag.name as agency_name', 'su.full_name as recruiter_name',
+          (eb) => eb.selectFrom('candidate_documents as cd').select('cd.id').whereRef('cd.candidate_id', '=', 'c.id').where('cd.document_type', '=', 'resume').where('cd.scan_status', '=', 'clean').orderBy('cd.created_at', 'desc').limit(1).as('resume_document_id'),
+          (eb) => eb.selectFrom('interviews as i').innerJoin('interviewers as m', 'm.interview_id', 'i.id').select('i.id').whereRef('i.application_id', '=', 'a.id').where('m.user_id', '=', p.userId).where('i.status', '<>', 'cancelled').orderBy('i.created_at', 'desc').limit(1).as('my_interview_id'),
+          (eb) => eb.selectFrom('hiring_decisions as d').select('d.reason').whereRef('d.application_id', '=', 'a.id').orderBy('d.decided_at', 'desc').limit(1).as('remark')])
+        .where(interviewerSees(p.userId));
+      if (f.q) { const like = `%${f.q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`; q = q.where((eb) => eb.or([eb('c.full_name', 'ilike', like), eb('a.sourcing_code', 'ilike', like), eb('a.temp_employee_code', 'ilike', like)])); }
+      const all = await q.orderBy('a.created_at', 'desc').limit(500).execute();
+      return f.status ? all.filter((r) => r.simple_status === f.status) : all;
+    });
+    return { data: rows.map((r) => ({ ...r, source: r.agency_name ? `Agency: ${r.agency_name}` : r.recruiter_name ? `Recruiter: ${r.recruiter_name}` : null })) };
+  });
+
+  app.post('/my-job-candidates/:id/resume-url', async (req) => {
+    const p = principal(req);
+    const { id } = idParams.parse(req.params);
+    const expiresAt = new Date(Date.now() + app.config.FILE_URL_TTL_SECONDS * 1000);
+    const docId = await withTenant(db, p.tenantId, async (tx) => {
+      const d = await tx.selectFrom('applications as a').innerJoin('candidate_documents as cd', 'cd.candidate_id', 'a.candidate_id').select('cd.id')
+        .where('a.id', '=', id).where(interviewerSees(p.userId)).where('cd.document_type', '=', 'resume').where('cd.scan_status', '=', 'clean')
+        .orderBy('cd.created_at', 'desc').limit(1).executeTakeFirst();
+      if (!d) throw notFound('Resume');
+      await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'application.resume_link_issued', entityType: 'application', entityId: id, metadata: { document_id: d.id } });
+      return d.id;
+    });
+    const token = signFileToken(app.config.FILE_URL_SECRET, { t: p.tenantId, d: docId, e: Math.floor(expiresAt.getTime() / 1000) });
+    return { data: { url: `/api/v1/files/${token}`, expires_at: expiresAt } };
   });
 
   // Selected, but the candidate did not join.

@@ -118,8 +118,8 @@ describe('duplicates', () => {
 
 describe('search', () => {
   beforeAll(async () => {
-    await create(admin, person('Search Alpha', { full_name: 'Zebulon Quirk', city: 'Chennai', skills: ['Rust', 'Kafka'], total_experience_years: 9, notice_period_days: 30, phone: '90000 11111' }));
-    await create(admin, person('Search Beta', { full_name: 'Yolanda Quirk', city: 'Pune', skills: ['Rust'], total_experience_years: 2, notice_period_days: 90 }));
+    await create(recruiter, person('Search Alpha', { full_name: 'Zebulon Quirk', city: 'Chennai', skills: ['Rust', 'Kafka'], total_experience_years: 9, notice_period_days: 30, phone: '90000 11111' }));
+    await create(recruiter, person('Search Beta', { full_name: 'Yolanda Quirk', city: 'Pune', skills: ['Rust'], total_experience_years: 2, notice_period_days: 90 }));
   });
 
   const search = async (cookie: string, query: string) =>
@@ -155,6 +155,8 @@ describe('who sees what', () => {
   beforeAll(async () => {
     const c = (await create(hr, person('Private Person', { phone: '91111 22222', current_ctc: 900_000, expected_ctc: 1_100_000 }))).json().data;
     candidateId = c.id;
+    // Recruiters see only candidates they added or sourced: make this one the recruiter's.
+    await ctx.adminDb.updateTable('candidates').set({ created_by: s.users.recruiter.id }).where('id', '=', c.id).execute();
     // Link to an Engineering vacancy so the Engineering manager may see the profile.
     const rq = await approvedRequisition(ctx, s);
     const v = await openVacancy(ctx, admin, rq);

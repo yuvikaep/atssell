@@ -20,7 +20,7 @@ async function selectedCandidate(termsOwner: 'recruiter' | 'interviewer' | 'admi
   expect(job.statusCode, job.body).toBe(201);
   const vacancyId = job.json().data.id;
   await call(ctx, admin, 'POST', `/vacancies/${vacancyId}/assign-recruiter`, { user_id: s.users.recruiter.id });
-  const cand = (await call(ctx, admin, 'POST', '/candidates', { full_name: `Pay ${label}`, email: `pay.${label}@mail.test` })).json().data;
+  const cand = (await call(ctx, recruiter, 'POST', '/candidates', { full_name: `Pay ${label}`, email: `pay.${label}@mail.test` })).json().data;
   const app = (await call(ctx, recruiter, 'POST', '/applications', { candidate_id: cand.id, vacancy_id: vacancyId })).json().data;
   const head = await addUser(ctx, s.co.tenant.id, { email: `head.${label}@${s.co.slug}.test`, role: 'interviewer' });
   const headCookie = await login(ctx, s.co.slug, `head.${label}@${s.co.slug}.test`);

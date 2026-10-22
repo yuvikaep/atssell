@@ -167,9 +167,10 @@ function Resumes({ c }: { c: CandidateProfile }) {
     mutationFn: (file: File) => upload(`/candidates/${c.id}/documents`, file, { document_type: 'resume' }),
     onSuccess: refresh,
   });
-  const download = useMutation({
-    mutationFn: (docId: string) => viewFile(() => api<{ data: { url: string } }>('POST', `/candidates/${c.id}/documents/${docId}/download-url`).then((x) => x.data.url)),
-  });
+  const link = (docId: string) => api<{ data: { url: string } }>('POST', `/candidates/${c.id}/documents/${docId}/download-url`).then((x) => x.data.url);
+  // View opens the PDF in the browser; Download saves the file.
+  const download = useMutation({ mutationFn: (docId: string) => viewFile(() => link(docId)) });
+  const save = useMutation({ mutationFn: async (docId: string) => window.location.assign(await link(docId)) });
 
   return (
     <div className="card">
@@ -196,7 +197,8 @@ function Resumes({ c }: { c: CandidateProfile }) {
                     <td><strong>{d.original_filename}</strong><div className="cell-sub">{formatBytes(d.size_bytes)} · {formatDate(d.created_at)}{d.uploaded_by_name ? ` · ${d.uploaded_by_name}` : ''}</div></td>
                     <td>{d.scan_status !== 'clean' && <Badge tone="warning">Scan {d.scan_status}</Badge>}</td>
                     <td className="actions">
-                      <button className="btn btn-sm" disabled={d.scan_status !== 'clean' || download.isPending} onClick={() => download.mutate(d.id)}>Download</button>
+                      <button className="btn btn-sm" disabled={d.scan_status !== 'clean' || download.isPending} onClick={() => download.mutate(d.id)}>View</button>
+                      <button className="btn btn-sm" disabled={d.scan_status !== 'clean' || save.isPending} onClick={() => save.mutate(d.id)}>Download</button>
                     </td>
                   </tr>
                 ))}

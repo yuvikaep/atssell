@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { call, setupApp, type TestContext } from './helpers.js';
-import { applicationOnVacancy, goodFeedback, inHours, PDF, scheduleInterview, setupCompany, uploadDocument } from './hiring-helpers.js';
+import { applicationOnVacancy, approvedRequisition, goodFeedback, openVacancy, inHours, PDF, scheduleInterview, setupCompany, uploadDocument } from './hiring-helpers.js';
 
 let ctx: TestContext;
 let s: Awaited<ReturnType<typeof setupCompany>>;
@@ -20,10 +20,16 @@ const rowFor = async (cookie: string, applicationId: string) => {
   expect(res.statusCode, res.body).toBe(200);
   return (res.json().data as { application_id: string; label: string; action: { kind: string } | null; feedback: { avg_rating: number } | null; remark: string | null }[]).find((r) => r.application_id === applicationId);
 };
+/** A job assigned to the recruiter, with a candidate the recruiter sourced (recruiters see only their own). */
 async function assigned(label: string) {
-  const a = await applicationOnVacancy(ctx, s, label);
-  await call(ctx, admin, 'POST', `/vacancies/${a.vacancyId}/assign-recruiter`, { user_id: s.users.recruiter.id });
-  return a;
+  const rq = await approvedRequisition(ctx, s);
+  const vacancy = await openVacancy(ctx, admin, rq);
+  await call(ctx, admin, 'POST', `/vacancies/${vacancy.id}/assign-recruiter`, { user_id: s.users.recruiter.id });
+  const cand = await call(ctx, recruiter, 'POST', '/candidates', { full_name: `Interviewee ${label}`, email: `interviewee.${label}@mail.test`, current_title: 'Analyst', city: 'Pune' });
+  if (cand.statusCode !== 201) throw new Error(`candidate failed: ${cand.body}`);
+  const app = await call(ctx, recruiter, 'POST', '/applications', { candidate_id: cand.json().data.id, vacancy_id: vacancy.id });
+  if (app.statusCode !== 201) throw new Error(`application failed: ${app.body}`);
+  return { vacancyId: vacancy.id, candidateId: cand.json().data.id as string, applicationId: app.json().data.id as string };
 }
 
 describe('candidate status for recruiters', () => {

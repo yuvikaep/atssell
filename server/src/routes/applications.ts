@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { assertJobRoleForVacancy } from './job-roles.js';
-import { agencyIdOf, candidateVisible, hasAny, vacancyVisible } from '../access.js';
+import { agencyIdOf, candidateVisible, hasAny, vacancyVisible, applicationSourcedBy } from '../access.js';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
 import { pgConstraint, pgErrorCode, withTenant, type Tx } from '../db.js';
@@ -40,7 +40,8 @@ async function loadApplication(tx: Tx, p: Principal, id: string, lock = false) {
     .innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id')
     .select(['a.id', 'a.status', 'a.stage_id', 'a.candidate_id', 'a.vacancy_id', 'v.status as vacancy_status', 'rq.department_id'])
     .where('a.id', '=', id)
-    .where(vacancyVisible(p, agencyId));
+    .where(vacancyVisible(p, agencyId))
+    .where(applicationSourcedBy(p));
   if (lock) q = q.forUpdate('a');
   const a = await q.executeTakeFirst();
   if (!a) throw notFound('Application');
@@ -83,6 +84,7 @@ export async function applicationRoutes(app: FastifyInstance) {
         .innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id')
         .innerJoin('pipeline_stages as s', 's.id', 'a.stage_id')
         .where(vacancyVisible(p, agencyId))
+        .where(applicationSourcedBy(p))
         .where(candidateVisible(p, agencyId));
       if (f.status !== 'all') base = base.where('a.status', '=', f.status);
       if (f.vacancy_id) base = base.where('a.vacancy_id', '=', f.vacancy_id);
@@ -132,7 +134,7 @@ export async function applicationRoutes(app: FastifyInstance) {
         .selectFrom('candidates as c')
         .select(['c.id', 'c.status'])
         .where('c.id', '=', body.candidate_id)
-        .where(candidateVisible(p, agencyId))
+        .where(candidateVisible(p, agencyId, { sourcing: true }))
         .executeTakeFirst();
       if (!candidate) throw notFound('Candidate');
       if (candidate.status !== 'active') throw new AppError(409, 'CANDIDATE_NOT_ACTIVE', 'This candidate profile was merged or archived.');

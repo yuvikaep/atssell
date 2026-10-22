@@ -55,7 +55,8 @@ export function DashboardPage() {
   // Each of the four roles has its own home.
   if (can(me, 'employment.manage')) return <HrDashboard name={me.user.full_name.split(' ')[0]!} />;
   if (isRecruiter(me)) return <MyPerformance kind="recruiter" name={me.user.full_name.split(' ')[0]!} />;
-  if (Object.keys(me.permissions).length === 0) return <Navigate to="/my-interviews" replace />;
+  // Interviewers land on their jobs' candidates: counts, selected ones, and their interviews from there.
+  if (Object.keys(me.permissions).length === 0) return <Navigate to="/job-candidates" replace />;
   // People who hire but do not run the process get a simpler home.
   if (isHiringManager(me)) return <HiringHomePage me={me} />;
   const canDepartments = can(me, 'departments.manage') || can(me, 'vacancies.view_all');

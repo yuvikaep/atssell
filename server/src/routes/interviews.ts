@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { z } from 'zod';
+import { simpleStatusSql } from '../simple-status.js';
 import { hasAny, vacancyVisible, interviewedApplication, isOnAnyPanel } from '../access.js';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
@@ -389,6 +390,8 @@ export async function interviewRoutes(app: FastifyInstance) {
         .select((eb) => [
           'i.id', 'i.round_name', 'i.mode', 'i.scheduled_start', 'i.scheduled_end', 'i.timezone', 'i.status', 'i.feedback_due_at',
           'c.id as candidate_id', 'c.full_name as candidate_name', 'v.id as vacancy_id', 'v.vacancy_code', 'v.title as vacancy_title',
+          // Where the candidate stands now (selected, joined…), next to the interview's own status.
+          simpleStatusSql('a').as('candidate_status'),
           eb.selectFrom('interviewers as m').leftJoin('users as u', 'u.id', 'm.user_id')
             .select(sql<string[]>`coalesce(array_agg(coalesce(u.full_name, m.external_name) order by m.created_at), '{}')`.as('n'))
             .whereRef('m.interview_id', '=', 'i.id').as('panel'),

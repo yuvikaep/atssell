@@ -1,7 +1,8 @@
+import { useMe } from './AppShell';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import { api, COMMON_TIMEZONES, isoToZoned, MODE_LABEL, zonedToIso, type DirectoryUser, type InterviewDetail, type InterviewMode } from '../api';
-import { panelOptionsQuery, plansQuery } from '../queries';
+import { api, COMMON_TIMEZONES, isoToZoned, MODE_LABEL, zonedToIso, type DirectoryUser, type InterviewDetail, type InterviewMode, can } from '../api';
+import { directoryQuery, panelOptionsQuery, plansQuery } from '../queries';
 import { Dialog, Field, fieldError, FormError } from './ui';
 
 export interface PanelDraft {
@@ -20,7 +21,7 @@ const defaultStart = (tz: string) => {
 const addHour = (local: string, tz: string, hours: number) => isoToZoned(new Date(new Date(zonedToIso(local, tz)).getTime() + hours * 3_600_000).toISOString(), tz);
 
 /** Panel chips plus the controls to add a colleague or an external interviewer. */
-export function PanelPicker({ panel, onChange, exclude = [], applicationId }: { panel: PanelDraft[]; onChange: (p: PanelDraft[]) => void; exclude?: string[]; applicationId: string }) {
+export function PanelPicker({ panel, onChange, exclude = [], applicationId, vacancyId }: { panel: PanelDraft[]; onChange: (p: PanelDraft[]) => void; exclude?: string[]; applicationId: string; vacancyId?: string }) {
   // Only the job's interviewers and the company admins can be put on the panel.
   const directory = useQuery(panelOptionsQuery(applicationId));
   const [colleague, setColleague] = useState('');
@@ -47,7 +48,8 @@ export function PanelPicker({ panel, onChange, exclude = [], applicationId }: { 
             <option value="">{directory.isPending ? 'Loading…' : 'Choose a colleague'}</option>
             {options.map((u) => <option key={u.id} value={u.id}>{u.full_name}{u.kind === 'admin' ? ' (admin)' : ''}</option>)}
           </select>
-          {noInterviewers && <span className="hint">No interviewers are assigned to this job yet. The admin adds them on the job page (Overview &amp; assignments).</span>}
+          {noInterviewers && !vacancyId && <span className="hint">No interviewers are assigned to this job yet. The admin adds them on the job page (Overview &amp; assignments).</span>}
+          {vacancyId && <AddJobInterviewer vacancyId={vacancyId} applicationId={applicationId} assigned={(directory.data ?? []).filter((u) => u.kind === 'interviewer').map((u) => u.id)} />}
         </Field>
         <div>
           <label className="muted" style={{ fontSize: 13, fontWeight: 550 }}>Or an external interviewer</label>
@@ -194,11 +196,34 @@ export function ScheduleDialog({ applicationId, vacancyId, interview, onClose }:
         {!editing && (
           <>
             <h2 style={{ fontSize: 14, margin: '8px 0 10px' }}>Panel</h2>
-            <PanelPicker panel={panel} onChange={setPanel} applicationId={applicationId!} />
+            <PanelPicker panel={panel} onChange={setPanel} applicationId={applicationId!} vacancyId={vacancyId} />
             {fieldError(save.error, 'panel') && <span className="field-error" style={{ color: 'var(--danger)' }}>{fieldError(save.error, 'panel')}</span>}
           </>
         )}
       </form>
     </Dialog>
+  );
+}
+
+/** For the admin, right in the scheduling form: add someone to this job's interviewers. */
+function AddJobInterviewer({ vacancyId, applicationId, assigned }: { vacancyId: string; applicationId: string; assigned: string[] }) {
+  const me = useMe();
+  const queryClient = useQueryClient();
+  const admin = can(me, 'users.manage');
+  const people = useQuery({ ...directoryQuery, enabled: admin });
+  const add = useMutation({
+    mutationFn: (user_id: string) => api('POST', `/vacancies/${vacancyId}/assign-interviewer`, { user_id }),
+    onSuccess: () => Promise.all([queryClient.invalidateQueries({ queryKey: ['panel-options', applicationId] }), queryClient.invalidateQueries({ queryKey: ['vacancy', vacancyId] })]),
+  });
+  if (!admin) return null;
+  const options = (people.data ?? []).filter((u) => !assigned.includes(u.id));
+  return (
+    <div style={{ marginTop: 6 }}>
+      <select aria-label="Add an interviewer to this job" value="" disabled={add.isPending} onChange={(e) => e.target.value && add.mutate(e.target.value)}>
+        <option value="">+ Add an interviewer to this job…</option>
+        {options.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+      </select>
+      {add.error && <span className="field-error">{(add.error as Error).message}</span>}
+    </div>
   );
 }

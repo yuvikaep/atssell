@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { z } from 'zod';
-import { agencyIdOf, candidateVisible, hasAny, redactCandidate, vacancyVisible } from '../access.js';
+import { agencyIdOf, candidateVisible, hasAny, redactCandidate, vacancyVisible, applicationSourcedBy, isRecruiterOnly } from '../access.js';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
 import { withTenant, type Tx } from '../db.js';
@@ -156,6 +156,7 @@ async function candidateProfile(tx: Tx, p: Principal, id: string) {
     ])
     .where('a.candidate_id', '=', id)
     .where(vacancyVisible(p, agencyId))
+    .where(applicationSourcedBy(p))
     .orderBy('a.created_at', 'desc')
     .execute();
 
@@ -172,6 +173,7 @@ async function candidateProfile(tx: Tx, p: Principal, id: string) {
     ])
     .where('a.candidate_id', '=', id)
     .where(vacancyVisible(p, agencyId))
+    .where(applicationSourcedBy(p))
     .$if(!!agencyId, (q) => q.where('s.agency_id', '=', agencyId!))
     .orderBy('s.submitted_at', 'desc')
     .execute();
@@ -203,7 +205,8 @@ async function candidateProfile(tx: Tx, p: Principal, id: string) {
       edit: can(p, 'candidates.manage') && c.status === 'active',
       view_contact: hasAny(p, 'candidates.view_contact') || !!agencyId,
       view_compensation: hasAny(p, 'candidates.view_compensation'),
-      upload: can(p, 'candidates.manage') && c.status === 'active',
+      // Resumes come in at sourcing; on the profile only the recruiter who added the candidate may add one.
+      upload: can(p, 'candidates.manage') && c.status === 'active' && isRecruiterOnly(p),
       add_to_vacancy: hasAny(p, 'applications.manage') && c.status === 'active',
       merge: can(p, 'candidates.manage') && c.status === 'active',
     },

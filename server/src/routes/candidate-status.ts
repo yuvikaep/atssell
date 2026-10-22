@@ -4,7 +4,7 @@
 import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { z } from 'zod';
-import { hasAny, vacancyVisible } from '../access.js';
+import { hasAny, vacancyVisible, applicationSourcedBy } from '../access.js';
 import { principal } from '../app.js';
 import { withTenant } from '../db.js';
 import { forbidden } from '../errors.js';
@@ -36,7 +36,8 @@ export async function candidateStatusRoutes(app: FastifyInstance) {
         .leftJoin('joining_terms as jt', (j) => j.onRef('jt.application_id', '=', 'a.id').on('jt.status', '=', 'approved'))
         .select(['a.id', 'a.status', 'a.created_at', 'a.sourcing_code', 'a.temp_employee_code', 'a.job_role_id', 'jr.name as job_role_name', sql<number | null>`coalesce((SELECT e.annual_ctc FROM employment_records e WHERE e.application_id = a.id), jt.annual_ctc)`.as('agreed_salary'), sql<string | null>`coalesce((SELECT e.joined_on FROM employment_records e WHERE e.application_id = a.id), jt.joining_date)::text`.as('joining_date'),
           (eb) => eb.selectFrom('candidate_documents as cd').select('cd.id').whereRef('cd.candidate_id', '=', 'c.id').where('cd.document_type', '=', 'resume').where('cd.scan_status', '=', 'clean').orderBy('cd.created_at', 'desc').limit(1).as('resume_document_id'), 'c.id as candidate_id', 'c.full_name', 'c.current_title', 'c.city', 'v.id as vacancy_id', 'v.title as vacancy_title'])
-        .where(vacancyVisible(p, null));
+        .where(vacancyVisible(p, null))
+        .where(applicationSourcedBy(p));
       if (f.vacancy_id) q = q.where('a.vacancy_id', '=', f.vacancy_id);
       if (f.q) {
         const like = `%${f.q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;

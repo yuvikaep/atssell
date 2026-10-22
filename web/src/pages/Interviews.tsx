@@ -1,3 +1,4 @@
+import { statusOf } from './CandidateMaster';
 import { canExport, ExportButton } from '../components/ExportButton';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -127,7 +128,7 @@ function InterviewTable({ rows }: { rows: InterviewRow[] }) {
   return (
     <div className="table-wrap">
       <table>
-        <thead><tr><th>When</th><th>Candidate</th><th>Round</th><th>Panel</th><th>Feedback</th><th>Status</th></tr></thead>
+        <thead><tr><th>When</th><th>Candidate</th><th>Round</th><th>Panel</th><th>Feedback</th><th>Interview</th><th>Candidate</th></tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
@@ -137,6 +138,7 @@ function InterviewTable({ rows }: { rows: InterviewRow[] }) {
               <td>{r.panel.length ? r.panel.join(', ') : <span className="muted">None yet</span>}</td>
               <td><FeedbackCell r={r} /></td>
               <td><Badge tone={STATUS_TONE[r.status]}>{INTERVIEW_STATUS_LABEL[r.status]}</Badge></td>
+              <td>{r.candidate_status ? <Badge tone={statusOf({ simple_status: r.candidate_status }).tone}>{statusOf({ simple_status: r.candidate_status }).label}</Badge> : null}</td>
             </tr>
           ))}
         </tbody>

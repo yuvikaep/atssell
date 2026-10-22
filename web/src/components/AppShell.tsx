@@ -6,7 +6,7 @@ import { api, can, isRecruiter, type Me } from '../api';
 import { meQuery, unreadCountQuery } from '../queries';
 
 interface NavItem {
-  to: '/' | '/departments' | '/users' | '/requisitions' | '/vacancies' | '/candidates' | '/pipeline' | '/agencies' | '/portal' | '/portal/submissions' | '/interviews' | '/my-interviews' | '/reports' | '/offers' | '/decisions' | '/sourcing' | '/status' | '/employees' | '/leaderboards' | '/terms' | '/team' | '/salary-joining' | '/setup';
+  to: '/' | '/departments' | '/users' | '/requisitions' | '/vacancies' | '/candidates' | '/pipeline' | '/agencies' | '/portal' | '/portal/submissions' | '/interviews' | '/my-interviews' | '/reports' | '/offers' | '/decisions' | '/sourcing' | '/status' | '/employees' | '/leaderboards' | '/terms' | '/team' | '/salary-joining' | '/setup' | '/job-candidates';
   label: string;
   icon: IconName;
   visible: (me: Me) => boolean;
@@ -40,6 +40,7 @@ const AGENCY_NAV: NavItem[] = [
 ];
 const INTERVIEWER_NAV: NavItem[] = [
   { to: '/my-interviews', label: 'My interviews', icon: 'chat', visible: () => true },
+  { to: '/job-candidates', label: 'Job candidates', icon: 'people', visible: () => true },
   { to: '/salary-joining', label: 'Salary & joining', icon: 'offer', visible: () => true },
   { to: '/employees', label: 'My department staff', icon: 'check', visible: (me) => !!me.head_of_departments?.length },
 ];

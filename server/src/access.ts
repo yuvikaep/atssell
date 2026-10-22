@@ -121,10 +121,39 @@ export function vacancyVisible(p: Principal, agencyId: string | null) {
  * - candidates.view company-wide: the whole candidate database.
  * - candidates.view for departments: candidates with an application to a vacancy in those departments.
  */
-export function candidateVisible(p: Principal, agencyId: string | null) {
+/**
+ * A company recruiter (not an admin) works only with the candidates they sourced themselves: they
+ * never see or change another recruiter's, or an agency's, candidates.
+ */
+export function isRecruiterOnly(p: Principal) {
+  return p.roles.some((r) => r.code === 'internal_recruiter') && !can(p, 'users.manage') && !can(p, 'employment.manage');
+}
+
+/** For a query over `applications as a`: what a recruiter-only person sourced. Everyone else: no limit. */
+export function applicationSourcedBy(p: Principal, alias = 'a') {
+  return (eb: ExpressionBuilder<any, any>): Expression<SqlBool> => {
+    if (!isRecruiterOnly(p)) return TRUE;
+    return eb.exists(eb.selectFrom('submissions as own').select('own.id')
+      .whereRef('own.application_id', '=', `${alias}.id` as never).where('own.source_user_id', '=', p.userId).where('own.agency_id', 'is', null));
+  };
+}
+
+export function candidateVisible(p: Principal, agencyId: string | null, opts: { sourcing?: boolean } = {}) {
   const scope = p.permissions['candidates.view'];
   return (eb: ExpressionBuilder<any, any>): Expression<SqlBool> => {
     if (!scope) return FALSE;
+    // Sourcing a person who is already in the database for a job is allowed (first submission per job
+    // wins and duplicates are recorded); only seeing and editing others' candidates is limited.
+    if (isRecruiterOnly(p) && !agencyId && !opts.sourcing) {
+      // Candidates they added, or sourced for a job.
+      return eb.or([
+        eb('c.created_by', '=', p.userId),
+        eb.exists(
+          eb.selectFrom('applications as a').innerJoin('submissions as s', 's.application_id', 'a.id').select('a.id')
+            .whereRef('a.candidate_id', '=', 'c.id').where('s.source_user_id', '=', p.userId).where('s.agency_id', 'is', null),
+        ),
+      ]);
+    }
     if (agencyId) {
       return eb.exists(
         eb.selectFrom('applications as a')

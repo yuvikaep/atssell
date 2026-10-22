@@ -458,6 +458,7 @@ export interface DirectoryUser {
 
 export interface InterviewRow {
   id: string;
+  candidate_status?: string;
   round_name: string;
   mode: InterviewMode;
   scheduled_start: string | null;

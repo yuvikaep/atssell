@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { SIMPLE_STATUSES, simpleStatusSql } from '../simple-status.js';
-import { agencyIdOf, candidateVisible, hasAny, vacancyVisible } from '../access.js';
+import { agencyIdOf, candidateVisible, hasAny, vacancyVisible, applicationSourcedBy } from '../access.js';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
 import { withTenant } from '../db.js';
@@ -98,6 +98,7 @@ export async function candidateMasterRoutes(app: FastifyInstance) {
             .whereRef('a.candidate_id', '=', 'c.id')
             .$if(!!f.vacancy_id, (q) => q.where('a.vacancy_id', '=', f.vacancy_id!))
             .where(vacancyVisible(p, null))
+            .where(applicationSourcedBy(p))
             .orderBy('a.created_at', 'desc')
             .limit(1)
             .as('la'),
