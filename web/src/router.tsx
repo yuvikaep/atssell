@@ -38,6 +38,7 @@ import { ResetPasswordPage } from './pages/ResetPassword';
 import { UsersPage } from './pages/Users';
 import { VacanciesPage } from './pages/Vacancies';
 import { SignupPage } from './pages/Signup';
+import { SalaryJoiningPage } from './pages/SalaryJoining';
 import { VacancyDetailPage } from './pages/VacancyDetail';
 import { meQuery, queryClient } from './queries';
 
@@ -97,6 +98,7 @@ const offerRoute = createRoute({ getParentRoute: () => appRoute, path: '/offers/
 const decisionsRoute = createRoute({ getParentRoute: () => appRoute, path: '/decisions', component: DecisionsPage });
 const accountRoute = createRoute({ getParentRoute: () => appRoute, path: '/account', component: AccountPage });
 const sourcingRoute = createRoute({ getParentRoute: () => appRoute, path: '/sourcing', component: SourcingPage, validateSearch: (s: Record<string, unknown>) => ({ job: typeof s.job === 'string' ? s.job : undefined }) });
+const salaryJoiningRoute = createRoute({ getParentRoute: () => appRoute, path: '/salary-joining', component: SalaryJoiningPage });
 const statusRoute = createRoute({ getParentRoute: () => appRoute, path: '/status', component: CandidateStatusPage, validateSearch: (s: Record<string, unknown>) => ({ job: typeof s.job === 'string' ? s.job : undefined }) });
 const employeesRoute = createRoute({ getParentRoute: () => appRoute, path: '/employees', component: EmployeesPage });
 const leaderboardsRoute = createRoute({ getParentRoute: () => appRoute, path: '/leaderboards', component: LeaderboardsPage });
@@ -120,7 +122,7 @@ const routeTree = rootRoute.addChildren([
     dashboardRoute, departmentsRoute, usersRoute, requisitionsRoute, requisitionRoute, vacanciesRoute, vacancyRoute,
     candidatesRoute, candidateRoute, pipelineRoute, agenciesRoute, agencyRoute,
     portalRoute, portalVacancyRoute, portalSubmissionsRoute,
-    interviewsRoute, interviewRoute, myInterviewsRoute, myInterviewRoute, notificationsRoute, reportsRoute, decisionsRoute, accountRoute, employeesRoute, leaderboardsRoute, termsRoute, teamRoute, sourcingRoute, statusRoute, offersRoute, offerRoute,
+    interviewsRoute, interviewRoute, myInterviewsRoute, myInterviewRoute, notificationsRoute, reportsRoute, decisionsRoute, accountRoute, employeesRoute, leaderboardsRoute, termsRoute, teamRoute, sourcingRoute, statusRoute, salaryJoiningRoute, offersRoute, offerRoute,
   ]),
 ]);
 

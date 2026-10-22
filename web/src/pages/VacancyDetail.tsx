@@ -87,6 +87,7 @@ function Overview({ v }: { v: VacancyDetail }) {
           <h2 style={{ marginBottom: 12 }}>Role</h2>
           <DetailGrid items={[
             ['Positions', v.headcount],
+            ['Salary & joining by', { admin: 'Admin', recruiter: 'Recruiter on this job', interviewer: 'Interviewer who selects' }[v.terms_owner] ?? 'Admin'],
             ['Employment type', EMPLOYMENT_TYPES[v.employment_type] ?? v.employment_type],
             ['Priority', <span style={{ textTransform: 'capitalize' }}>{v.priority}</span>],
             ['Experience', v.min_experience_years != null || v.max_experience_years != null ? `${v.min_experience_years ?? 0}–${v.max_experience_years ?? '+'} years` : '—'],

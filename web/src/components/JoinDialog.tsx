@@ -4,10 +4,11 @@ import { api } from '../api';
 import { Dialog, Field, FormError } from './ui';
 
 /** Records the actual date of joining and the agreed CTC; for agency hires it fixes today's commercial terms. */
-export function JoinDialog({ applicationId, name, title, onClose }: { applicationId: string; name: string; title?: string | null; onClose: () => void }) {
-  const [on, setOn] = useState(new Date().toISOString().slice(0, 10));
+export function JoinDialog({ applicationId, name, title, ctc: agreedCtc, date, onClose }: { applicationId: string; name: string; title?: string | null; ctc?: number | string | null; date?: string | null; onClose: () => void }) {
+  // Starts from the approved salary and joining date, when there are any.
+  const [on, setOn] = useState(date?.slice(0, 10) ?? new Date().toISOString().slice(0, 10));
   const [designation, setDesignation] = useState(title ?? '');
-  const [ctc, setCtc] = useState('');
+  const [ctc, setCtc] = useState(agreedCtc != null ? String(Number(agreedCtc)) : '');
   const save = useMutation({ mutationFn: () => api('POST', `/applications/${applicationId}/join`, { joined_on: on, designation, annual_ctc: Number(ctc) }), onSuccess: onClose });
   return (
     <Dialog open title={`Mark ${name} as joined`} onClose={onClose} footer={<><button className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={save.isPending || !designation.trim() || !ctc} onClick={() => save.mutate()}>Mark joined</button></>}>

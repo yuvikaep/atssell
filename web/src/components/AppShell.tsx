@@ -6,7 +6,7 @@ import { api, can, isRecruiter, type Me } from '../api';
 import { meQuery, unreadCountQuery } from '../queries';
 
 interface NavItem {
-  to: '/' | '/departments' | '/users' | '/requisitions' | '/vacancies' | '/candidates' | '/pipeline' | '/agencies' | '/portal' | '/portal/submissions' | '/interviews' | '/my-interviews' | '/reports' | '/offers' | '/decisions' | '/sourcing' | '/status' | '/employees' | '/leaderboards' | '/terms' | '/team';
+  to: '/' | '/departments' | '/users' | '/requisitions' | '/vacancies' | '/candidates' | '/pipeline' | '/agencies' | '/portal' | '/portal/submissions' | '/interviews' | '/my-interviews' | '/reports' | '/offers' | '/decisions' | '/sourcing' | '/status' | '/employees' | '/leaderboards' | '/terms' | '/team' | '/salary-joining';
   label: string;
   icon: IconName;
   visible: (me: Me) => boolean;
@@ -23,6 +23,7 @@ const HR_NAV: NavItem[] = [
   { to: '/candidates', label: 'Candidates', icon: 'people', visible: () => true },
   { to: '/interviews', label: 'Interviews', icon: 'calendar', visible: () => true },
   { to: '/agencies', label: 'Agencies', icon: 'agency', visible: () => true },
+  { to: '/salary-joining', label: 'Salary & joining', icon: 'offer', visible: () => true },
   { to: '/employees', label: 'Employees', icon: 'check', visible: () => true },
   { to: '/leaderboards', label: 'Leaderboards', icon: 'trophy', visible: () => true },
   { to: '/reports', label: 'Reports', icon: 'chart', visible: () => true },
@@ -36,13 +37,17 @@ const AGENCY_NAV: NavItem[] = [
   { to: '/terms', label: 'Commercial terms', icon: 'offer', visible: (me) => me.roles.some((r) => r.code === 'agency_admin') },
   { to: '/team', label: 'My team', icon: 'shield', visible: (me) => me.roles.some((r) => r.code === 'agency_admin') },
 ];
-const INTERVIEWER_NAV: NavItem[] = [{ to: '/my-interviews', label: 'My interviews', icon: 'chat', visible: () => true }];
+const INTERVIEWER_NAV: NavItem[] = [
+  { to: '/my-interviews', label: 'My interviews', icon: 'chat', visible: () => true },
+  { to: '/salary-joining', label: 'Salary & joining', icon: 'offer', visible: () => true },
+];
 
 const RECRUITER_NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: 'home', visible: () => true },
   { to: '/vacancies', label: 'Jobs', icon: 'jobs', visible: () => true },
   { to: '/sourcing', label: 'Sourcing', icon: 'plus', visible: () => true },
   { to: '/status', label: 'Candidate status', icon: 'check', visible: () => true },
+  { to: '/salary-joining', label: 'Salary & joining', icon: 'offer', visible: () => true },
 ];
 
 const NAV: { section?: string; items: NavItem[] }[] = [

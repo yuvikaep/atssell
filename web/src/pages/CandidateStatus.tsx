@@ -63,6 +63,7 @@ export function CandidateStatusPage() {
                 <td>
                   <Badge tone={r.tone}>{r.label}</Badge>
                   {r.scheduled_start ? <div className="cell-sub">{formatInZone(r.scheduled_start, 'Asia/Kolkata')}</div> : r.detail && <div className="cell-sub">{r.detail}</div>}
+                  {r.agreed_salary !== null && <div className="cell-sub">₹{r.agreed_salary.toLocaleString('en-IN')} / yr{r.joining_date ? ` · joins ${r.joining_date}` : ''}</div>}
                 </td>
                 <td><Feedback r={r} /></td>
                 <td className="actions">

@@ -44,6 +44,7 @@ export function PortalSubmissionsPage() {
                       <td>
                         <strong>{s.candidate_name}</strong>
                         <IdTags sourcing={s.sourcing_code} temp={s.temp_employee_code} />
+                        {s.agreed_salary !== null && <div className="cell-sub">Joined/joining at ₹{s.agreed_salary.toLocaleString('en-IN')} / yr{s.joining_date ? ` · ${s.joining_date}` : ''}</div>}
                         <div className="cell-sub">{[s.current_title, s.city].filter(Boolean).join(' · ')}</div>
                         <div className="cell-sub">{[s.email, s.phone].filter(Boolean).join(' · ')}</div>
                       </td>

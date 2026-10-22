@@ -157,7 +157,8 @@ export async function employmentRoutes(app: FastifyInstance) {
         .leftJoin('submissions as sb', (j) => j.onRef('sb.application_id', '=', 'a.id').on('sb.ownership_state', '=', 'accepted'))
         .leftJoin('agencies as ag', 'ag.id', 'sb.agency_id')
         .leftJoin('users as su', 'su.id', 'sb.source_user_id')
-        .select(['a.id as application_id', 'a.sourcing_code', 'a.temp_employee_code', 'c.id as candidate_id', 'c.full_name as candidate_name', 'c.current_title',
+        .leftJoin('joining_terms as jt', (j) => j.onRef('jt.application_id', '=', 'a.id').on('jt.status', '=', 'approved'))
+        .select(['jt.annual_ctc as agreed_salary', sql<string | null>`jt.joining_date::text`.as('joining_date'), 'a.id as application_id', 'a.sourcing_code', 'a.temp_employee_code', 'c.id as candidate_id', 'c.full_name as candidate_name', 'c.current_title',
           'v.id as vacancy_id', 'v.title as job_title', 'ag.name as agency_name', 'su.full_name as recruiter_name',
           (eb) => eb.selectFrom('hiring_decisions as d').select('d.decided_at').whereRef('d.application_id', '=', 'a.id').where('d.decision', '=', 'select').orderBy('d.decided_at', 'desc').limit(1).as('selected_on')])
         .where('a.temp_employee_code', 'is not', null)

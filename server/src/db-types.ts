@@ -176,6 +176,8 @@ export interface RequisitionApprovalsTable {
 }
 
 export interface VacanciesTable {
+  /** Who settles salary and joining for selected candidates. */
+  terms_owner: Generated<'recruiter' | 'interviewer' | 'admin'>;
   id: Generated<string>;
   tenant_id: string;
   requisition_id: string;
@@ -704,6 +706,7 @@ export interface Database {
   ownership_events: OwnershipEventsTable;
   tenant_counters: TenantCountersTable;
   job_roles: JobRolesTable;
+  joining_terms: JoiningTermsTable;
   interview_plans: InterviewPlansTable;
   interviews: InterviewsTable;
   interviewers: InterviewersTable;
@@ -736,4 +739,16 @@ export interface JobRolesTable {
   status: Generated<RecordStatus>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+}
+
+export interface JoiningTermsTable {
+  application_id: string;
+  tenant_id: string;
+  annual_ctc: Numeric;
+  joining_date: Date | string;
+  status: Generated<'proposed' | 'approved'>;
+  proposed_by: string;
+  proposed_at: Generated<Date>;
+  approved_by: string | null;
+  approved_at: Date | null;
 }

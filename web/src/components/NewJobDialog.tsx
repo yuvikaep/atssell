@@ -10,12 +10,12 @@ export function NewJobDialog({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const departments = useQuery(departmentsQuery('active'));
-  const [f, setF] = useState({ title: '', department_id: '', location: '', openings: '1', salary_min: '', salary_max: '', description: '' });
+  const [f, setF] = useState({ title: '', department_id: '', location: '', openings: '1', terms_owner: 'admin', salary_min: '', salary_max: '', description: '' });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
   const create = useMutation({
     mutationFn: () => api<{ data: { id: string } }>('POST', '/jobs', {
-      title: f.title, department_id: f.department_id, location: f.location, openings: Number(f.openings),
+      title: f.title, department_id: f.department_id, location: f.location, openings: Number(f.openings), terms_owner: f.terms_owner,
       salary_min: num(f.salary_min), salary_max: num(f.salary_max), description: f.description,
     }),
     onSuccess: async (r) => {
@@ -33,7 +33,13 @@ export function NewJobDialog({ onClose }: { onClose: () => void }) {
         <Field id="job-dept" label="Department"><select id="job-dept" value={f.department_id} onChange={set('department_id')}><option value="">Choose…</option>{(departments.data ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></Field>
         <Field id="job-loc" label="Location" error={fieldError(create.error, 'location')}><input id="job-loc" value={f.location} onChange={set('location')} /></Field>
         <Field id="job-open" label="Openings" error={fieldError(create.error, 'openings')}><input id="job-open" type="number" min={1} value={f.openings} onChange={set('openings')} /></Field>
-        <span />
+        <Field id="job-terms" label="Who finalises salary & joining?" hint="They enter it after selection; the admin approves.">
+          <select id="job-terms" value={f.terms_owner} onChange={set('terms_owner')}>
+            <option value="admin">Admin</option>
+            <option value="recruiter">Recruiter on this job</option>
+            <option value="interviewer">Interviewer who selects</option>
+          </select>
+        </Field>
         <Field id="job-min" label="Salary from (₹ per year)"><input id="job-min" type="number" min={0} value={f.salary_min} onChange={set('salary_min')} /></Field>
         <Field id="job-max" label="Salary to (₹ per year)" error={fieldError(create.error, 'salary_max')}><input id="job-max" type="number" min={0} value={f.salary_max} onChange={set('salary_max')} /></Field>
         <div className="span-2"><Field id="job-desc" label="Description (optional)"><textarea id="job-desc" rows={3} value={f.description} onChange={set('description')} /></Field></div>

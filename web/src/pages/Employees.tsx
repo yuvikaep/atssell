@@ -10,6 +10,7 @@ import { JoinDialog } from '../components/JoinDialog';
 interface YetToJoin {
   application_id: string; sourcing_code: string; temp_employee_code: string; candidate_id: string; candidate_name: string; current_title: string | null;
   vacancy_id: string; job_title: string; agency_name: string | null; recruiter_name: string | null; selected_on: string | null;
+  agreed_salary: number | string | null; joining_date: string | null;
 }
 
 interface Emp {
@@ -82,7 +83,7 @@ export function EmployeesPage() {
         {invoice.error && <div style={{ padding: 12 }}><FormError error={invoice.error} /></div>}
       </div>
       {exiting && <ExitDialog e={exiting} onClose={() => setExiting(null)} />}
-      {joining && <JoinDialog applicationId={joining.application_id} name={joining.candidate_name} title={joining.current_title} onClose={() => { setJoining(null); queryClient.invalidateQueries({ queryKey: ['employment'] }); }} />}
+      {joining && <JoinDialog applicationId={joining.application_id} name={joining.candidate_name} title={joining.current_title} ctc={joining.agreed_salary} date={joining.joining_date} onClose={() => { setJoining(null); queryClient.invalidateQueries({ queryKey: ['employment'] }); }} />}
     </>
   );
 }
@@ -179,7 +180,7 @@ function YetToJoinTable({ q, onJoin }: { q: { isPending: boolean; isError: boole
             <td><Link className="row-link" to="/candidates/$id" params={{ id: r.candidate_id }} search={{}}>{r.candidate_name}</Link>{r.current_title && <div className="cell-sub">{r.current_title}</div>}<IdTags sourcing={r.sourcing_code} temp={r.temp_employee_code} /></td>
             <td><Link className="row-link" to="/vacancies/$id" params={{ id: r.vacancy_id }}>{r.job_title}</Link></td>
             <td>{r.agency_name ?? r.recruiter_name ?? '—'}</td>
-            <td>{r.selected_on ? formatDay(r.selected_on) : '—'}</td>
+            <td>{r.selected_on ? formatDay(r.selected_on) : '—'}{r.agreed_salary !== null && <div className="cell-sub">₹{Number(r.agreed_salary).toLocaleString('en-IN')} · joins {r.joining_date}</div>}</td>
             <td><Badge tone="warning">Yet to join</Badge></td>
             <td className="actions"><button className="btn btn-sm btn-primary" onClick={() => onJoin(r)}>Mark joined</button></td>
           </tr>

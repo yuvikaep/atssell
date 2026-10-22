@@ -2,6 +2,7 @@
 // with a single status in everyday words, what the interviewers said, and whether an interview still
 // needs booking. It reads the same tables as everything else and never exposes contact or pay.
 import type { FastifyInstance } from 'fastify';
+import { sql } from 'kysely';
 import { z } from 'zod';
 import { hasAny, vacancyVisible } from '../access.js';
 import { principal } from '../app.js';
@@ -32,7 +33,8 @@ export async function candidateStatusRoutes(app: FastifyInstance) {
         .innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id')
         .innerJoin('candidates as c', 'c.id', 'a.candidate_id')
         .leftJoin('job_roles as jr', 'jr.id', 'a.job_role_id')
-        .select(['a.id', 'a.status', 'a.created_at', 'a.sourcing_code', 'a.temp_employee_code', 'a.job_role_id', 'jr.name as job_role_name',
+        .leftJoin('joining_terms as jt', (j) => j.onRef('jt.application_id', '=', 'a.id').on('jt.status', '=', 'approved'))
+        .select(['a.id', 'a.status', 'a.created_at', 'a.sourcing_code', 'a.temp_employee_code', 'a.job_role_id', 'jr.name as job_role_name', sql<number | null>`coalesce((SELECT e.annual_ctc FROM employment_records e WHERE e.application_id = a.id), jt.annual_ctc)`.as('agreed_salary'), sql<string | null>`coalesce((SELECT e.joined_on FROM employment_records e WHERE e.application_id = a.id), jt.joining_date)::text`.as('joining_date'),
           (eb) => eb.selectFrom('candidate_documents as cd').select('cd.id').whereRef('cd.candidate_id', '=', 'c.id').where('cd.document_type', '=', 'resume').where('cd.scan_status', '=', 'clean').orderBy('cd.created_at', 'desc').limit(1).as('resume_document_id'), 'c.id as candidate_id', 'c.full_name', 'c.current_title', 'c.city', 'v.id as vacancy_id', 'v.title as vacancy_title'])
         .where(vacancyVisible(p, null));
       if (f.vacancy_id) q = q.where('a.vacancy_id', '=', f.vacancy_id);
@@ -84,7 +86,7 @@ export async function candidateStatusRoutes(app: FastifyInstance) {
         const sentOn = decided?.decision === 'additional_round' || decided?.decision === 'advance';
         const needsInterview = open && !upcoming && !awaiting && !finalDecision && (!!draft || fbs.length === 0 || sentOn);
         return {
-          application_id: a.id, sourcing_code: a.sourcing_code, temp_employee_code: a.temp_employee_code, job_role_id: a.job_role_id, job_role_name: a.job_role_name, resume_document_id: a.resume_document_id, candidate_id: a.candidate_id, candidate_name: a.full_name, headline: [a.current_title, a.city].filter(Boolean).join(' · ') || null,
+          application_id: a.id, sourcing_code: a.sourcing_code, temp_employee_code: a.temp_employee_code, job_role_id: a.job_role_id, job_role_name: a.job_role_name, resume_document_id: a.resume_document_id, agreed_salary: a.agreed_salary === null ? null : Number(a.agreed_salary), joining_date: a.joining_date, candidate_id: a.candidate_id, candidate_name: a.full_name, headline: [a.current_title, a.city].filter(Boolean).join(' · ') || null,
           vacancy_id: a.vacancy_id, vacancy_title: a.vacancy_title, label, tone, detail,
           scheduled_start: upcoming?.scheduled_start ?? null,
           feedback: fbs.length ? { count: fbs.length, avg_rating: Math.round((fbs.reduce((n, x) => n + x.overall_rating, 0) / fbs.length) * 10) / 10, recommendations: fbs.map((x) => x.recommendation) } : null,
