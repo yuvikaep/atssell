@@ -297,6 +297,8 @@ export interface ApplicationsTable {
   id: Generated<string>;
   /** Set by a trigger on insert. */
   sourcing_code: Generated<string>;
+  /** The department's job role the candidate was sourced for. */
+  job_role_id: Generated<string | null>;
   /** Set by a trigger once the candidate is selected or hired. */
   temp_employee_code: Generated<string | null>;
   tenant_id: string;
@@ -701,6 +703,7 @@ export interface Database {
   submissions: SubmissionsTable;
   ownership_events: OwnershipEventsTable;
   tenant_counters: TenantCountersTable;
+  job_roles: JobRolesTable;
   interview_plans: InterviewPlansTable;
   interviews: InterviewsTable;
   interviewers: InterviewersTable;
@@ -724,3 +727,13 @@ export interface Database {
 
 export type User = Selectable<UsersTable>;
 export type Department = Selectable<DepartmentsTable>;
+
+export interface JobRolesTable {
+  id: Generated<string>;
+  tenant_id: string;
+  department_id: string;
+  name: string;
+  status: Generated<RecordStatus>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}

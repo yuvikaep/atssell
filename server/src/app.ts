@@ -29,6 +29,7 @@ import { agencyPortalRoutes } from './routes/agency-portal.js';
 import { authRoutes } from './routes/auth.js';
 import { candidateRoutes, fileRoutes } from './routes/candidates.js';
 import { departmentRoutes } from './routes/departments.js';
+import { jobRoleRoutes } from './routes/job-roles.js';
 import { feedbackRoutes, publicFeedbackRoutes } from './routes/feedback.js';
 import { interviewRoutes } from './routes/interviews.js';
 import { invitationPublicRoutes } from './routes/invitations.js';
@@ -158,6 +159,7 @@ export async function buildApp({ config, db, mailer, storage, scanner, logger = 
         if (afterAuthenticatedRequest) authed.addHook('onResponse', async (req) => { if (req.principal) afterAuthenticatedRequest(req.principal.tenantId); });
         await authed.register(meRoutes);
         await authed.register(departmentRoutes);
+        await authed.register(jobRoleRoutes);
         await authed.register(userRoutes);
         await authed.register(requisitionRoutes);
         await authed.register(vacancyRoutes);

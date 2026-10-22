@@ -443,4 +443,44 @@ export async function userRoutes(app: FastifyInstance) {
     });
     return reply.status(201).send({ data: { user_id: user.id, company: p.tenantSlug } });
   });
+
+  // Create a user straight away (no email needed): name, email, role and a first password. The role
+  // decides what they see after signing in: HR Lead, Company Recruiter, Interviewer, or an agency's
+  // admin / sub-recruiter (then the agency is required). Roles can be changed later from the user.
+  app.post('/users', async (req, reply) => {
+    const p = principal(req);
+    requirePermission(p, 'users.manage');
+    const body = z.object({
+      full_name: z.string().trim().min(1, 'Enter their name.').max(200),
+      email: z.email('Enter a valid email.').trim().toLowerCase(),
+      password: passwordSchema,
+      role_code: z.string().min(1, 'Choose a role.').max(64),
+      department_id: z.uuid().nullish(),
+      agency_id: z.uuid().nullish(),
+    }).parse(req.body);
+    const passwordHash = await hashPassword(body.password);
+
+    const user = await withTenant(db, p.tenantId, async (tx) => {
+      const agencyRole = AGENCY_ROLES.has(body.role_code);
+      const role = agencyRole
+        ? await tx.selectFrom('roles').select(['id', 'code', 'name']).where('code', '=', body.role_code).executeTakeFirstOrThrow()
+        : await findAssignableRole(tx, body.role_code);
+      if (agencyRole) {
+        if (!body.agency_id) throw new AppError(400, 'VALIDATION_ERROR', 'Some fields are invalid.', [{ path: 'agency_id', message: 'Choose the agency.' }]);
+        const agency = await tx.selectFrom('agencies').select('status').where('id', '=', body.agency_id).executeTakeFirst();
+        if (!agency || agency.status !== 'active') throw new AppError(422, 'INVALID_AGENCY', 'Agency was not found or is inactive.');
+      }
+      if (body.department_id) await assertActiveDepartment(tx, body.department_id);
+      const existing = await tx.selectFrom('users').select('id').where('email', '=', body.email).executeTakeFirst();
+      if (existing) throw new AppError(409, 'USER_EXISTS', 'A user with this email already exists.');
+
+      // Same path as an accepted invitation, so roles, departments and agency membership match exactly.
+      const { inv } = await issueInvitation(tx, p, {
+        email: body.email, roleId: role.id, departmentId: agencyRole ? null : body.department_id ?? null, agencyId: agencyRole ? body.agency_id : null,
+      });
+      const open = await findInvitation(tx, { id: inv.id }, true);
+      return createInvitedUser(tx, req, open, body.full_name, passwordHash, p.userId);
+    });
+    return reply.status(201).send({ data: { user_id: user.id, company: p.tenantSlug } });
+  });
 }

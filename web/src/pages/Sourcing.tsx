@@ -7,7 +7,7 @@ import { AddCandidateDialog } from '../components/PipelineBoard';
 import { candidateBody, CandidateFormFields, emptyCandidateForm, type CandidateForm } from '../components/CandidateForm';
 import { ScheduleDialog } from '../components/ScheduleDialog';
 import { EmptyState, ErrorState, Field, FormError, Loading } from '../components/ui';
-import { hiringHomeQuery } from '../queries';
+import { hiringHomeQuery, jobRolesQuery } from '../queries';
 
 type Added = { applicationId: string; name: string };
 
@@ -49,7 +49,7 @@ export function SourcingPage() {
       {step === 2 && job && (added ? (
         <Done added={added} job={job.title} jobId={job.id} onAnother={() => setAdded(null)} onChange={() => { setStep(1); setAdded(null); }} />
       ) : (
-        <CandidateStep jobId={job.id} jobTitle={job.title} onChangeJob={() => setStep(1)} onAdded={setAdded} />
+        <CandidateStep jobId={job.id} jobTitle={job.title} departmentId={job.department_id} department={job.department} onChangeJob={() => setStep(1)} onAdded={setAdded} />
       ))}
     </>
   );
@@ -72,11 +72,13 @@ function Done({ added, job, jobId, onAnother, onChange }: { added: Added; job: s
   );
 }
 
-function CandidateStep({ jobId, jobTitle, onChangeJob, onAdded }: { jobId: string; jobTitle: string; onChangeJob: () => void; onAdded: (a: Added) => void }) {
+function CandidateStep({ jobId, jobTitle, departmentId, department, onChangeJob, onAdded }: { jobId: string; jobTitle: string; departmentId: string; department: string; onChangeJob: () => void; onAdded: (a: Added) => void }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<CandidateForm>(emptyCandidateForm);
   const [file, setFile] = useState<File | null>(null);
   const [source, setSource] = useState('internal_recruiter');
+  const [jobRoleId, setJobRoleId] = useState('');
+  const roles = useQuery(jobRolesQuery(departmentId));
   const [finding, setFinding] = useState(false);
   const me = useMe();
   const maxBytes = me.limits?.resume_max_bytes ?? 10 * 1024 * 1024;
@@ -91,7 +93,7 @@ function CandidateStep({ jobId, jobTitle, onChangeJob, onAdded }: { jobId: strin
     retry: false,
   });
 
-  const apply = (candidateId: string) => api<{ data: { id: string } }>('POST', '/applications', { candidate_id: candidateId, vacancy_id: jobId, source_type: source });
+  const apply = (candidateId: string) => api<{ data: { id: string } }>('POST', '/applications', { candidate_id: candidateId, vacancy_id: jobId, source_type: source, job_role_id: jobRoleId || null });
   const save = useMutation({
     mutationFn: async () => {
       const c = await api<{ data: { id: string } }>('POST', '/candidates', candidateBody(form, false));
@@ -99,7 +101,7 @@ function CandidateStep({ jobId, jobTitle, onChangeJob, onAdded }: { jobId: strin
       const a = await apply(c.data.id);
       return { applicationId: a.data.id, name: form.full_name.trim() };
     },
-    onSuccess: async (r) => { await refresh(); setForm(emptyCandidateForm); setFile(null); onAdded(r); },
+    onSuccess: async (r) => { await refresh(); setForm(emptyCandidateForm); setFile(null); setJobRoleId(''); onAdded(r); },
   });
   // Someone already in the database: add the existing profile to this job instead of creating a second one.
   const existing = useMutation({
@@ -130,6 +132,12 @@ function CandidateStep({ jobId, jobTitle, onChangeJob, onAdded }: { jobId: strin
       <FormError error={existing.error ?? (save.error && !(save.error instanceof ApiError && (save.error.details || save.error.code === 'DUPLICATE_CANDIDATE')) ? save.error : null)} />
       <CandidateFormFields form={form} setForm={setForm} error={save.error} canSeeCtc={false} />
       <div className="form-grid">
+        <Field id="src-role" label="Job role" hint={roles.data?.length === 0 ? `No roles in ${department} yet. An admin adds them under Departments.` : `Roles in ${department}.`}>
+          <select id="src-role" value={jobRoleId} onChange={(e) => setJobRoleId(e.target.value)} disabled={!roles.data?.length}>
+            <option value="">{roles.data?.length ? 'Choose the role' : 'No roles yet'}</option>
+            {roles.data?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </Field>
         <Field id="src-source" label="Where did you find them?">
           <select id="src-source" value={source} onChange={(e) => setSource(e.target.value)}>
             {['internal_recruiter', 'referral', 'direct', 'job_board', 'other'].map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
@@ -140,7 +148,7 @@ function CandidateStep({ jobId, jobTitle, onChangeJob, onAdded }: { jobId: strin
         </Field>
       </div>
       <div className="actions-row" style={{ marginTop: 8 }}>
-        <button className="btn btn-primary" type="submit" disabled={save.isPending || !form.full_name.trim() || (!form.email.trim() && !form.phone.trim()) || exact.length > 0 || (!!file && file.size > maxBytes)}>{save.isPending ? 'Adding…' : 'Add to this job'}</button>
+        <button className="btn btn-primary" type="submit" disabled={save.isPending || (!!roles.data?.length && !jobRoleId) || !form.full_name.trim() || (!form.email.trim() && !form.phone.trim()) || exact.length > 0 || (!!file && file.size > maxBytes)}>{save.isPending ? 'Adding…' : 'Add to this job'}</button>
         <button className="btn" type="button" onClick={() => setFinding(true)}>Find someone already in the database</button>
       </div>
       {finding && <AddCandidateDialog vacancyId={jobId} onClose={() => { setFinding(false); refresh(); }} />}

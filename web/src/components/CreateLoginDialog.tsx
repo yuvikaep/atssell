@@ -4,7 +4,7 @@ import { api } from '../api';
 import { Dialog, Field, fieldError, FormError } from './ui';
 
 /** A readable 14-character first password (no look-alike characters). */
-function generatePassword() {
+export function generatePassword() {
   const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const bytes = crypto.getRandomValues(new Uint8Array(14));
   return Array.from(bytes, (b) => chars[b % chars.length]).join('');

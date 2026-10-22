@@ -63,7 +63,7 @@ export async function hiringHomeRoutes(app: FastifyInstance) {
           .selectFrom('vacancies as v')
           .innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id')
           .innerJoin('departments as d', 'd.id', 'rq.department_id')
-          .select(['v.id', 'v.title', 'v.vacancy_code', 'v.location', 'v.headcount', 'v.status', 'v.opened_at', 'd.name as department'])
+          .select(['v.id', 'v.title', 'v.vacancy_code', 'v.location', 'v.headcount', 'v.status', 'v.opened_at', 'd.name as department', 'd.id as department_id'])
           .where('v.status', 'in', ['open', 'on_hold']).where(vacancyVisible(p, null))
           .orderBy('v.opened_at').limit(20).execute();
         const counts = vacancies.length === 0 ? [] : await tx
@@ -97,7 +97,7 @@ export async function hiringHomeRoutes(app: FastifyInstance) {
             feedback_count: w.feedback_count, avg_rating: w.avg_rating, recommendations: w.recommendations, can_decide: canDecide(w.department_id),
           })),
           vacancies: vacancies.map((v) => ({
-            id: v.id, title: v.title, code: v.vacancy_code, location: v.location, department: v.department, status: v.status, headcount: v.headcount,
+            id: v.id, title: v.title, code: v.vacancy_code, location: v.location, department: v.department, department_id: v.department_id, status: v.status, headcount: v.headcount,
             days_open: Math.floor((now.getTime() - v.opened_at.getTime()) / DAY),
             hired: hired.find((h) => h.vacancy_id === v.id)?.n ?? 0,
             funnel: { new: n(v.id, ['submitted']), screening: n(v.id, ['screening']), shortlisted: n(v.id, ['shortlisted']), interview: n(v.id, ['interview']), offer: n(v.id, ['offer']) },

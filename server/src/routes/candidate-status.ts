@@ -21,6 +21,7 @@ export async function candidateStatusRoutes(app: FastifyInstance) {
       // Name, sourcing ID (SRC-…) or temp employee ID (TEMP-…).
       q: z.string().trim().max(100).optional(),
       selected: z.enum(['yes', 'no']).optional(),
+      job_role_id: z.uuid().optional(),
     }).parse(req.query);
     const now = new Date();
 
@@ -30,13 +31,15 @@ export async function candidateStatusRoutes(app: FastifyInstance) {
         .innerJoin('vacancies as v', 'v.id', 'a.vacancy_id')
         .innerJoin('requisitions as rq', 'rq.id', 'v.requisition_id')
         .innerJoin('candidates as c', 'c.id', 'a.candidate_id')
-        .select(['a.id', 'a.status', 'a.created_at', 'a.sourcing_code', 'a.temp_employee_code', 'c.id as candidate_id', 'c.full_name', 'c.current_title', 'c.city', 'v.id as vacancy_id', 'v.title as vacancy_title'])
+        .leftJoin('job_roles as jr', 'jr.id', 'a.job_role_id')
+        .select(['a.id', 'a.status', 'a.created_at', 'a.sourcing_code', 'a.temp_employee_code', 'a.job_role_id', 'jr.name as job_role_name', 'c.id as candidate_id', 'c.full_name', 'c.current_title', 'c.city', 'v.id as vacancy_id', 'v.title as vacancy_title'])
         .where(vacancyVisible(p, null));
       if (f.vacancy_id) q = q.where('a.vacancy_id', '=', f.vacancy_id);
       if (f.q) {
         const like = `%${f.q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
         q = q.where((eb) => eb.or([eb('c.full_name', 'ilike', like), eb('a.sourcing_code', 'ilike', like), eb('a.temp_employee_code', 'ilike', like)]));
       }
+      if (f.job_role_id) q = q.where('a.job_role_id', '=', f.job_role_id);
       if (f.selected === 'yes') q = q.where('a.temp_employee_code', 'is not', null);
       if (f.selected === 'no') q = q.where('a.temp_employee_code', 'is', null);
       const apps = await q.orderBy('a.created_at', 'desc').limit(300).execute();
@@ -80,7 +83,7 @@ export async function candidateStatusRoutes(app: FastifyInstance) {
         const sentOn = decided?.decision === 'additional_round' || decided?.decision === 'advance';
         const needsInterview = open && !upcoming && !awaiting && !finalDecision && (!!draft || fbs.length === 0 || sentOn);
         return {
-          application_id: a.id, sourcing_code: a.sourcing_code, temp_employee_code: a.temp_employee_code, candidate_id: a.candidate_id, candidate_name: a.full_name, headline: [a.current_title, a.city].filter(Boolean).join(' · ') || null,
+          application_id: a.id, sourcing_code: a.sourcing_code, temp_employee_code: a.temp_employee_code, job_role_id: a.job_role_id, job_role_name: a.job_role_name, candidate_id: a.candidate_id, candidate_name: a.full_name, headline: [a.current_title, a.city].filter(Boolean).join(' · ') || null,
           vacancy_id: a.vacancy_id, vacancy_title: a.vacancy_title, label, tone, detail,
           scheduled_start: upcoming?.scheduled_start ?? null,
           feedback: fbs.length ? { count: fbs.length, avg_rating: Math.round((fbs.reduce((n, x) => n + x.overall_rating, 0) / fbs.length) * 10) / 10, recommendations: fbs.map((x) => x.recommendation) } : null,

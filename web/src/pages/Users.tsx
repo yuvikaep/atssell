@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useState, type FormEvent } from 'react';
 import { CreateLoginDialog } from '../components/CreateLoginDialog';
+import { CreateUserDialog } from '../components/CreateUserDialog';
 import { api, canAll, type Invitation, type UserRow } from '../api';
 import { useMe } from '../components/AppShell';
 import { Dialog, EmptyState, ErrorState, Field, fieldError, Forbidden, formatDate, FormError, Loading, StatusBadge, InviteLinkNotice } from '../components/ui';
@@ -15,6 +16,7 @@ export function UsersPage() {
   const allowed = canAll(me, 'users.manage');
   const [tab, setTab] = useSessionState('jm.users.tab', 'users', TABS);
   const [inviting, setInviting] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [inviteLink, setInviteLink] = useState<{ link?: string | null; email: string } | null>(null);
   const invitations = useQuery({ ...invitationsQuery, enabled: allowed });
 
@@ -25,9 +27,12 @@ export function UsersPage() {
       <div className="page-header">
         <div>
           <h1>Team & roles</h1>
-          <p>Invite people and control what they can see and do.</p>
+          <p>Create users or invite them, and control what they can see and do. Use Roles on a user to change their access later.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setInviting(true)}>Invite user</button>
+        <div className="actions-row">
+          <button className="btn btn-primary" onClick={() => setCreating(true)}>Create user</button>
+          <button className="btn" onClick={() => setInviting(true)}>Invite by link</button>
+        </div>
       </div>
 
       <div className="card">
@@ -43,6 +48,7 @@ export function UsersPage() {
 
       {inviting && <InviteDialog onClose={() => setInviting(false)} onSent={(l) => { setInviteLink(l); setTab('invitations'); }} />}
       <InviteLinkNotice link={inviteLink?.link} email={inviteLink?.email} />
+      {creating && <CreateUserDialog onClose={() => setCreating(false)} />}
     </>
   );
 }

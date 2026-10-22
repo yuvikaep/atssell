@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { z } from 'zod';
+import { assertJobRoleForVacancy } from './job-roles.js';
 import { agencyIdOf, candidateVisible, hasAny, vacancyVisible } from '../access.js';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
@@ -19,6 +20,8 @@ const CreateBody = z.object({
   vacancy_id: z.uuid(),
   source_type: z.enum(INTERNAL_SOURCES).default('internal_recruiter'),
   source_reference: z.string().trim().max(200).nullable().default(null),
+  // The department's job role this candidate is sourced for.
+  job_role_id: z.uuid().nullish(),
 });
 const StageBody = z.object({ stage_id: z.uuid(), reason: z.string().trim().max(2000).optional() });
 const ListQuery = pageQuery.extend({
@@ -136,6 +139,7 @@ export async function applicationRoutes(app: FastifyInstance) {
 
       const initial = await tx.selectFrom('pipeline_stages').select('id').where('is_initial', '=', true).executeTakeFirst();
       if (!initial) throw new AppError(500, 'NO_INITIAL_STAGE', 'The pipeline has no starting stage configured.');
+      if (body.job_role_id) await assertJobRoleForVacancy(tx, body.job_role_id, body.vacancy_id);
 
       // First submission wins for this job. The lock lets the database pick one winner when two people
       // submit the same candidate at nearly the same moment.
@@ -148,7 +152,7 @@ export async function applicationRoutes(app: FastifyInstance) {
 
       const application = await tx
         .insertInto('applications')
-        .values({ tenant_id: p.tenantId, candidate_id: body.candidate_id, vacancy_id: body.vacancy_id, stage_id: initial.id })
+        .values({ tenant_id: p.tenantId, candidate_id: body.candidate_id, vacancy_id: body.vacancy_id, stage_id: initial.id, job_role_id: body.job_role_id ?? null })
         .returning('id')
         .executeTakeFirstOrThrow();
       await tx
