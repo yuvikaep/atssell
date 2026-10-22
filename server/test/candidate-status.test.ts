@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { call, setupApp, type TestContext } from './helpers.js';
-import { applicationOnVacancy, goodFeedback, inHours, scheduleInterview, setupCompany } from './hiring-helpers.js';
+import { applicationOnVacancy, goodFeedback, inHours, PDF, scheduleInterview, setupCompany, uploadDocument } from './hiring-helpers.js';
 
 let ctx: TestContext;
 let s: Awaited<ReturnType<typeof setupCompany>>;
@@ -124,5 +124,31 @@ describe('an interviewer decides on the candidate they interviewed', () => {
     // Selected, not joined yet: listed under Employees → Yet to join, with the temp ID.
     const yet = (await call(ctx, admin, 'GET', '/employment/yet-to-join')).json().data;
     expect(yet.find((r: { application_id: string }) => r.application_id === a.applicationId)?.temp_employee_code).toMatch(/^TEMP-/);
+  });
+});
+
+describe('resumes for recruiters and interviewers', () => {
+  it('shows the latest resume on candidate status, and lets only the panel interviewer open it', async () => {
+    const { addUser, login } = await import('./helpers.js');
+    const panel = await addUser(ctx, s.co.tenant.id, { email: `panel@${s.co.slug}.test`, role: 'interviewer' });
+    await addUser(ctx, s.co.tenant.id, { email: `nopanel@${s.co.slug}.test`, role: 'interviewer' });
+    const a = await assigned('hhhhhhhh');
+    const iv = await scheduleInterview(ctx, recruiter, a.applicationId, { scheduled_start: inHours(2), scheduled_end: inHours(3), panel: [{ user_id: panel.id }] });
+    const panelCookie = await login(ctx, s.co.slug, `panel@${s.co.slug}.test`);
+    const otherCookie = await login(ctx, s.co.slug, `nopanel@${s.co.slug}.test`);
+
+    expect((await call(ctx, panelCookie, 'GET', `/me/interviews/${iv.id}`)).json().data.has_resume).toBe(false);
+    expect((await call(ctx, panelCookie, 'POST', `/me/interviews/${iv.id}/resume-url`)).statusCode).toBe(404);
+    expect((await uploadDocument(ctx, recruiter, a.candidateId, 'cv.pdf', PDF('panel'))).statusCode).toBe(201);
+
+    const row = (await call(ctx, recruiter, 'GET', '/candidate-status')).json().data.find((r: { application_id: string }) => r.application_id === a.applicationId);
+    expect(row.resume_document_id).toBeTruthy();
+    expect((await call(ctx, panelCookie, 'GET', `/me/interviews/${iv.id}`)).json().data.has_resume).toBe(true);
+    const link = await call(ctx, panelCookie, 'POST', `/me/interviews/${iv.id}/resume-url`);
+    expect(link.statusCode, link.body).toBe(200);
+    const file = await ctx.app.inject({ method: 'GET', url: link.json().data.url });
+    expect(file.statusCode).toBe(200);
+    expect(file.body).toContain('%PDF');
+    expect((await call(ctx, otherCookie, 'POST', `/me/interviews/${iv.id}/resume-url`)).statusCode).toBe(404);
   });
 });

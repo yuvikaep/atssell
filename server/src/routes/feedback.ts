@@ -251,11 +251,14 @@ export async function feedbackRoutes(app: FastifyInstance) {
       const mine = await tx.selectFrom('feedback').select(['id', 'mode', 'overall_rating', 'recommendation', 'competency_ratings', 'notes', 'submitted_at']).where('interview_id', '=', id).where('interviewer_id', '=', ctx.interviewer_id).executeTakeFirst();
       const app = await tx.selectFrom('interviews as i').innerJoin('applications as a', 'a.id', 'i.application_id')
         .select(['a.id', 'a.status']).where('i.id', '=', id).executeTakeFirstOrThrow();
+      const resume = await tx.selectFrom('interviews as i').innerJoin('applications as a', 'a.id', 'i.application_id').innerJoin('candidate_documents as cd', 'cd.candidate_id', 'a.candidate_id')
+        .select('cd.id').where('i.id', '=', id).where('cd.document_type', '=', 'resume').where('cd.scan_status', '=', 'clean').limit(1).executeTakeFirst();
       const last = await tx.selectFrom('hiring_decisions').select(['decision', 'reason', 'decided_at']).where('application_id', '=', app.id).orderBy('decided_at', 'desc').limit(1).executeTakeFirst();
       return {
         data: {
           id, status: ctx.status, feedback_status: ctx.feedback_status,
           // After their feedback, an interviewer decides on the candidate themselves.
+          has_resume: !!resume,
           application_id: app.id, can_decide: app.status === 'active' && ctx.feedback_status === 'submitted', last_decision: last ?? null,
           can_submit: ctx.feedback_status === 'pending' && !['cancelled', 'no_show'].includes(ctx.status),
           ...bootstrap(ctx), my_feedback: mine ?? null, request: await nextRoundRequest(tx, id),
@@ -263,6 +266,25 @@ export async function feedbackRoutes(app: FastifyInstance) {
         },
       };
     });
+  });
+
+  // The interviewer's short-lived link to the candidate's latest resume.
+  app.post('/me/interviews/:id/resume-url', async (req) => {
+    const p = principal(req);
+    const { id } = idParams.parse(req.params);
+    const expiresAt = new Date(Date.now() + config.FILE_URL_TTL_SECONDS * 1000);
+    const docId = await withTenant(db, p.tenantId, async (tx) => {
+      await myInterview(tx, p, id);
+      const d = await tx.selectFrom('interviews as i').innerJoin('applications as a', 'a.id', 'i.application_id')
+        .innerJoin('candidate_documents as cd', 'cd.candidate_id', 'a.candidate_id')
+        .select('cd.id').where('i.id', '=', id).where('cd.document_type', '=', 'resume').where('cd.scan_status', '=', 'clean')
+        .orderBy('cd.created_at', 'desc').limit(1).executeTakeFirst();
+      if (!d) throw notFound('Resume');
+      await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'interview.resume_link_issued', entityType: 'interview', entityId: id, metadata: { document_id: d.id } });
+      return d.id;
+    });
+    const signed = signFileToken(config.FILE_URL_SECRET, { t: p.tenantId, d: docId, e: Math.floor(expiresAt.getTime() / 1000) });
+    return { data: { url: `/api/v1/files/${signed}`, expires_at: expiresAt } };
   });
 
   app.post('/me/interviews/:id/feedback', async (req, reply) => {

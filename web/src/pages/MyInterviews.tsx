@@ -93,7 +93,7 @@ export function MyInterviewDetailPage() {
       <BackLink to="/my-interviews">My interviews</BackLink>
       <div className="page-header">
         <div>
-          <div className="title-row"><h1>{d.candidate.full_name}</h1><Badge tone={STATUS_TONE[d.status]}>{INTERVIEW_STATUS_LABEL[d.status]}</Badge></div>
+          <div className="title-row"><h1>{d.candidate.full_name}</h1><Badge tone={STATUS_TONE[d.status]}>{INTERVIEW_STATUS_LABEL[d.status]}</Badge>{d.has_resume ? <ViewResume interviewId={d.id} /> : <span className="muted">No resume uploaded</span>}</div>
           <p>{d.job.title} · {d.interview.round_name} · {formatInZone(d.interview.scheduled_start, d.interview.timezone)}</p>
         </div>
       </div>
@@ -180,4 +180,14 @@ function YourDecision({ d }: { d: MyInterviewDetail }) {
       {nextRound && <NextRoundDialog applicationId={d.application_id} candidateName={d.candidate.full_name} onClose={() => { setNextRound(false); refresh(); }} />}
     </div>
   );
+}
+
+/** The candidate's latest resume for this interviewer (a short-lived signed link). */
+function ViewResume({ interviewId }: { interviewId: string }) {
+  const open = useMutation({
+    mutationFn: () => api<{ data: { url: string } }>('POST', `/me/interviews/${interviewId}/resume-url`),
+    // The file downloads (it is sent as an attachment), so the page stays put.
+    onSuccess: (res) => window.location.assign(res.data.url),
+  });
+  return <button className="btn btn-sm" disabled={open.isPending} onClick={() => open.mutate()}>{open.isPending ? 'Opening…' : 'View resume'}</button>;
 }

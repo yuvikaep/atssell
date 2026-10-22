@@ -559,6 +559,7 @@ export interface FeedbackBootstrap {
 
 export interface MyInterviewDetail extends FeedbackBootstrap {
   request: NextRoundRequest | null;
+  has_resume: boolean;
   application_id: string;
   can_decide: boolean;
   last_decision: { decision: string; reason: string | null; decided_at: string } | null;
@@ -669,7 +670,7 @@ export function isRecruiter(me: Me) {
   return can(me, 'applications.manage') && can(me, 'vacancies.view_assigned') && !can(me, 'vacancies.view_all') && !can(me, 'users.manage');
 }
 export interface CandidateStatusRow {
-  application_id: string; job_role_id: string | null; job_role_name: string | null; sourcing_code: string; temp_employee_code: string | null; candidate_id: string; candidate_name: string; headline: string | null;
+  application_id: string; resume_document_id: string | null; job_role_id: string | null; job_role_name: string | null; sourcing_code: string; temp_employee_code: string | null; candidate_id: string; candidate_name: string; headline: string | null;
   vacancy_id: string; vacancy_title: string; label: string; tone: 'muted' | 'info' | 'warning' | 'success' | 'danger'; detail: string | null;
   scheduled_start: string | null;
   feedback: { count: number; avg_rating: number; recommendations: string[] } | null;

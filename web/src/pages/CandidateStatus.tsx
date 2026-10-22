@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useState } from 'react';
 import { Link, useSearch } from '@tanstack/react-router';
-import { api, formatInZone, RECOMMENDATION_LABEL, type CandidateStatusRow, type Recommendation } from '../api';
+import { api, upload, formatInZone, RECOMMENDATION_LABEL, type CandidateStatusRow, type Recommendation } from '../api';
 import { ScheduleDialog } from '../components/ScheduleDialog';
 import { SetTimeDialog } from '../components/SetTimeDialog';
 import { Badge, Dialog, IdTags, EmptyState, ErrorState, Field, FormError, Loading } from '../components/ui';
@@ -59,6 +59,7 @@ export function CandidateStatusPage() {
                 <td><Feedback r={r} /></td>
                 <td className="actions">
                   {r.action && <button className="btn btn-sm btn-primary" onClick={() => setBooking(r)}>{r.action.kind === 'set_time' ? 'Set interview time' : 'Schedule interview'}</button>}
+                  <ResumeButton r={r} onUploaded={refresh} />
                   <Link className="btn btn-sm" to="/candidates/$id" params={{ id: r.candidate_id }} search={{}}>View</Link>
                   <Link className="btn btn-sm" to="/candidates/$id" params={{ id: r.candidate_id }} search={{ edit: '1' }}>Edit</Link>
                   <button className="btn btn-sm" onClick={() => setAnother(r)}>Another job</button>
@@ -132,5 +133,25 @@ function AnotherJobDialog({ row, jobs, onClose }: { row: CandidateStatusRow; job
         </>
       )}
     </Dialog>
+  );
+}
+
+/** Opens the latest resume, or uploads one when the candidate has none yet (an existing resume is not replaced here). */
+function ResumeButton({ r, onUploaded }: { r: CandidateStatusRow; onUploaded: () => unknown }) {
+  const open = useMutation({
+    mutationFn: () => api<{ data: { url: string } }>('POST', `/candidates/${r.candidate_id}/documents/${r.resume_document_id}/download-url`),
+    // The file downloads (it is sent as an attachment), so the page stays put.
+    onSuccess: (res) => window.location.assign(res.data.url),
+  });
+  const send = useMutation({
+    mutationFn: (file: File) => upload(`/candidates/${r.candidate_id}/documents`, file, { document_type: 'resume' }),
+    onSuccess: onUploaded,
+  });
+  if (r.resume_document_id) return <button className="btn btn-sm" disabled={open.isPending} onClick={() => open.mutate()}>Resume</button>;
+  return (
+    <label className="btn btn-sm" title={send.error ? (send.error as Error).message : 'No resume yet. Upload a PDF, DOC or DOCX.'}>
+      {send.isPending ? 'Uploading…' : send.isError ? 'Upload failed' : 'Upload resume'}
+      <input type="file" accept=".pdf,.doc,.docx" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) send.mutate(f); e.target.value = ''; }} />
+    </label>
   );
 }
