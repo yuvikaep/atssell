@@ -8,9 +8,9 @@
 # Only rms_web is published, on 127.0.0.1 so that nothing but the tunnel on this machine can reach it.
 name: rms
 
+# Built once, by the api service; migrate and tenant run the same image.
 x-api-image: &api-image
   image: rms-api:latest
-  build: { context: ../.., dockerfile: server/Dockerfile }
 
 services:
   db:
@@ -37,6 +37,7 @@ services:
 
   api:
     <<: *api-image
+    build: { context: ../.., dockerfile: server/Dockerfile }
     container_name: rms_api
     restart: unless-stopped
     depends_on: { migrate: { condition: service_completed_successfully } }
