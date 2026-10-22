@@ -38,6 +38,14 @@ const ConfigSchema = z.object({
   CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
   MAIL_DRIVER: z.enum(['console', 'smtp', 'off']).optional(),
   SMTP_URL: z.string().min(1).optional(),
+  // Instead of SMTP_URL: separate settings, so an email address or password needs no URL encoding (Gmail: see docs/EMAIL.md).
+  SMTP_HOST: z.string().min(1).optional(),
+  // 465 is TLS from the start; 587 upgrades with STARTTLS.
+  SMTP_PORT: z.coerce.number().int().positive().default(465),
+  SMTP_USER: z.string().min(1).optional(),
+  // Gmail shows app passwords in groups of four letters; the spaces are not part of it.
+  SMTP_PASSWORD: z.string().min(1).transform((s) => s.replace(/\s+/g, '')).optional(),
+  // Defaults to "RMS <SMTP_USER>". Gmail sends only from the signed-in account or an alias set up in Gmail.
   MAIL_FROM: z.string().min(3).optional(),
   FILE_URL_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
 });
@@ -91,7 +99,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   ])];
   if (config.STORAGE_DRIVER === 's3' && !config.S3_BUCKET) throw new Error('S3_BUCKET is required when STORAGE_DRIVER=s3');
   if (config.STORAGE_DRIVER === 'blob' && !config.BLOB_READ_WRITE_TOKEN) throw new Error('BLOB_READ_WRITE_TOKEN is required when STORAGE_DRIVER=blob (connect a Blob store in Vercel Storage)');
-  if (config.MAIL_DRIVER === 'smtp' && (!config.SMTP_URL || !config.MAIL_FROM)) throw new Error('SMTP_URL and MAIL_FROM are required when MAIL_DRIVER=smtp');
+  if (config.MAIL_DRIVER === 'smtp') {
+    if (!config.SMTP_URL && !(config.SMTP_HOST && config.SMTP_USER && config.SMTP_PASSWORD)) {
+      throw new Error('MAIL_DRIVER=smtp needs SMTP_URL, or SMTP_HOST, SMTP_USER and SMTP_PASSWORD');
+    }
+    config.MAIL_FROM ??= config.SMTP_USER ? `RMS <${config.SMTP_USER}>` : undefined;
+    if (!config.MAIL_FROM) throw new Error('MAIL_FROM is required when MAIL_DRIVER=smtp with SMTP_URL');
+  }
   if (config.SCANNER_DRIVER === 'http' && (!config.SCANNER_URL || !config.SCANNER_TOKEN)) throw new Error('SCANNER_URL and SCANNER_TOKEN are required when SCANNER_DRIVER=http');
   if (config.NODE_ENV === 'production') {
     if (config.SCANNER_DRIVER === 'http' && !config.SCANNER_URL!.startsWith('https://')) throw new Error('SCANNER_URL must be https:// in production');

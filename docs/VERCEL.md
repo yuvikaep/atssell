@@ -91,7 +91,7 @@ that needs it is refused with a clear message (HTTP 503):
 | --- | --- | --- |
 | File storage | Resume uploads and CSV exports are refused | A connected Vercel Blob store (`BLOB_READ_WRITE_TOKEN`), or `STORAGE_DRIVER=s3`, `S3_BUCKET`, `S3_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (plus `S3_ENDPOINT` for S3-compatible stores such as Cloudflare R2) |
 | Malware scanning | Uploads are refused (nothing unscanned is ever stored) | `SCANNER_DRIVER=clamav`, `CLAMAV_HOST`, `CLAMAV_PORT` (default 3310) |
-| Email | Invitations, feedback-request and notification emails are not sent (feedback links are still shown to copy); password reset requests are accepted but send nothing | `MAIL_DRIVER=smtp`, `SMTP_URL`, `MAIL_FROM` |
+| Email | Invitations, feedback-request and notification emails are not sent (feedback links are still shown to copy); password reset requests are accepted but send nothing | `MAIL_DRIVER=smtp` with `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` (Gmail: see [EMAIL.md](EMAIL.md)), or `SMTP_URL` and `MAIL_FROM` |
 
 Uploads need both storage and scanning. ClamAV is an external service that this configuration does not
 provision; keep its TCP endpoint private or protected. The development drivers (`local`, `dev`,

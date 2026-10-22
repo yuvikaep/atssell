@@ -85,7 +85,7 @@ Per job: the first accepted submission of a candidate (by a recruiter or an agen
 
 ## Documentation
 
-[`docs/SECURITY.md`](docs/SECURITY.md) · [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) · [`docs/RUNBOOK.md`](docs/RUNBOOK.md) · [`docs/DATA_PROTECTION.md`](docs/DATA_PROTECTION.md) · [`docs/PILOT_PLAN.md`](docs/PILOT_PLAN.md)
+[`docs/SECURITY.md`](docs/SECURITY.md) · [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) · [`docs/RUNBOOK.md`](docs/RUNBOOK.md) · [`docs/DATA_PROTECTION.md`](docs/DATA_PROTECTION.md) · [`docs/PILOT_PLAN.md`](docs/PILOT_PLAN.md) · [`docs/EMAIL.md`](docs/EMAIL.md)
 
 ## Using the hiring flow (Sprint 2)
 
