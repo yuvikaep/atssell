@@ -17,7 +17,7 @@ export function AppErrorPage({ error, reset }: ErrorComponentProps) {
   // The server's own explanation (missing settings, database not set up) helps whoever has to fix it.
   const details = error instanceof ApiError && Array.isArray(error.details) ? error.details.filter((d): d is string => typeof d === 'string') : [];
   return (
-    <AuthLayout title="Can't reach JobsMato right now">
+    <AuthLayout title="Can't reach RMS right now">
       <p>Check your connection and try again. If this keeps happening, contact support.</p>
       <div className="alert alert-error">
         {error instanceof ApiError ? `${error.code}: ${error.message}` : error instanceof Error && error.message ? error.message : 'Unknown error'}

@@ -72,7 +72,7 @@ services:
       CLAMAV_HOST: clamav
       MAIL_DRIVER: smtp
       SMTP_URL: smtp://mail:1025
-      MAIL_FROM: "JobsMato <no-reply@jobsmato.local>"
+      MAIL_FROM: "RMS <no-reply@rms.local>"
 
   web:
     build: { context: ., dockerfile: web/Dockerfile }

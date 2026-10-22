@@ -42,5 +42,5 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -f server/Dockerfile -t jobsmato-api .
-      - run: docker build -f web/Dockerfile -t jobsmato-web .
+      - run: docker build -f server/Dockerfile -t rms-api .
+      - run: docker build -f web/Dockerfile -t rms-web .

@@ -13,12 +13,12 @@ export class SmtpMailer implements Mailer {
   }
 
   sendInvitation(e: InvitationEmail) {
-    return this.send(e.to, `You're invited to ${e.companyName} on JobsMato`,
-      `${e.inviterName} invited you to join ${e.companyName} on JobsMato as ${e.roleName}.\n\nAccept the invitation: ${e.link}\n\nThe link works once and expires ${e.expiresAt.toUTCString()}.\n`);
+    return this.send(e.to, `You're invited to ${e.companyName} on RMS`,
+      `${e.inviterName} invited you to join ${e.companyName} on RMS as ${e.roleName}.\n\nAccept the invitation: ${e.link}\n\nThe link works once and expires ${e.expiresAt.toUTCString()}.\n`);
   }
 
   sendPasswordReset(e: PasswordResetEmail) {
-    return this.send(e.to, `Reset your JobsMato password for ${e.companyName}`,
+    return this.send(e.to, `Reset your RMS password for ${e.companyName}`,
       `Someone asked to reset your password for ${e.companyName}.\n\nChoose a new password: ${e.link}\n\nThe link works once and expires ${e.expiresAt.toUTCString()}. If this was not you, ignore this email.\n`);
   }
 

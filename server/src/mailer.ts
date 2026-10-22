@@ -54,11 +54,11 @@ export class ConsoleMailer implements Mailer {
   }
 
   async sendInvitation(e: InvitationEmail) {
-    this.print(e.to, `You're invited to ${e.companyName} on JobsMato as ${e.roleName}`, e.link);
+    this.print(e.to, `You're invited to ${e.companyName} on RMS as ${e.roleName}`, e.link);
   }
 
   async sendPasswordReset(e: PasswordResetEmail) {
-    this.print(e.to, `Reset your JobsMato password for ${e.companyName}`, e.link);
+    this.print(e.to, `Reset your RMS password for ${e.companyName}`, e.link);
   }
 
   async sendFeedbackRequest(e: FeedbackRequestEmail) {

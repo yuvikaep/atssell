@@ -1,4 +1,4 @@
-# JobsMato ATS
+# RMS: Recruitment Management System
 
 Multi-tenant applicant tracking system for companies, their internal recruiters, external agencies
 and interviewers. Product spec: [`PRD/`](PRD/). Database design notes: [`PRD/schema_changes_v1.1.md`](PRD/schema_changes_v1.1.md).

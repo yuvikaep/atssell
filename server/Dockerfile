@@ -1,4 +1,4 @@
-# Build context is the repository root:  docker build -f server/Dockerfile -t jobsmato-api .
+# Build context is the repository root:  docker build -f server/Dockerfile -t rms-api .
 FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
