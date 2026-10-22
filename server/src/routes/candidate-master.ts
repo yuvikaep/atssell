@@ -25,6 +25,9 @@ const ListQuery = pageQuery.extend({
   vacancy_id: z.uuid().optional(),
   source: z.enum(['agency', 'internal']).optional(),
   agency_id: z.uuid().optional(),
+  // Comma-separated: the sourcing recruiters or agencies to include.
+  recruiter_ids: z.string().max(4000).optional().transform((v) => (v ? v.split(',').filter(Boolean) : [])).pipe(z.array(z.uuid())),
+  agency_ids: z.string().max(4000).optional().transform((v) => (v ? v.split(',').filter(Boolean) : [])).pipe(z.array(z.uuid())),
   min_experience: z.coerce.number().min(0).optional(),
   sort: z.enum(['name', 'city', 'experience', 'notice', 'added', 'job', 'status']).default('added'),
   dir: z.enum(['asc', 'desc']).default('desc'),
@@ -91,7 +94,7 @@ export async function candidateMasterRoutes(app: FastifyInstance) {
             .leftJoin('submissions as sb', (j) => j.onRef('sb.application_id', '=', 'a.id').on('sb.ownership_state', '=', 'accepted'))
             .leftJoin('agencies as ag', 'ag.id', 'sb.agency_id')
             .leftJoin('users as su', 'su.id', 'sb.source_user_id')
-            .select([simpleStatusSql('a').as('simple_status'), 'a.id as application_id', 'a.sourcing_code', 'a.temp_employee_code', 'a.status as app_status', 'v.id as vacancy_id', 'v.title as job_title', 'v.vacancy_code', 'st.code as stage_code', 'st.name as stage_name', 'st.sort_order as stage_sort', 'ag.name as agency_name', 'su.full_name as recruiter_name', 'sb.agency_id as owner_agency_id'])
+            .select([simpleStatusSql('a').as('simple_status'), 'a.id as application_id', 'a.sourcing_code', 'a.temp_employee_code', 'a.status as app_status', 'v.id as vacancy_id', 'v.title as job_title', 'v.vacancy_code', 'st.code as stage_code', 'st.name as stage_name', 'st.sort_order as stage_sort', 'ag.name as agency_name', 'su.full_name as recruiter_name', 'sb.agency_id as owner_agency_id', 'sb.source_user_id as owner_user_id'])
             .whereRef('a.candidate_id', '=', 'c.id')
             .$if(!!f.vacancy_id, (q) => q.where('a.vacancy_id', '=', f.vacancy_id!))
             .where(vacancyVisible(p, null))
@@ -120,6 +123,8 @@ export async function candidateMasterRoutes(app: FastifyInstance) {
       if (f.source === 'agency') base = base.where('la.owner_agency_id', 'is not', null);
       if (f.source === 'internal') base = base.where('la.application_id', 'is not', null).where('la.owner_agency_id', 'is', null);
       if (f.agency_id) base = base.where('la.owner_agency_id', '=', f.agency_id);
+      if (f.agency_ids.length) base = base.where('la.owner_agency_id', 'in', f.agency_ids);
+      if (f.recruiter_ids.length) base = base.where('la.owner_agency_id', 'is', null).where('la.owner_user_id', 'in', f.recruiter_ids);
       if (f.min_experience !== undefined) base = base.where('c.total_experience_years', '>=', f.min_experience);
 
       const { total } = await base.select(sql<number>`count(*)::int`.as('total')).executeTakeFirstOrThrow();

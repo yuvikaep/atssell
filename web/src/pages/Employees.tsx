@@ -1,3 +1,4 @@
+import { ExportButton } from '../components/ExportButton';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -40,7 +41,13 @@ export function EmployeesPage() {
   const due = reps.data?.filter((r) => r.status === 'due').length ?? 0;
   return (
     <>
-      <div className="page-header"><div><h1>Employees</h1><p>Joining, employment status, exits, and replacements agencies owe. Selected candidates wait under Yet to join until you mark them joined.</p></div></div>
+      <div className="page-header"><div><h1>Employees</h1><p>Joining, employment status, exits, and replacements agencies owe. Selected candidates wait under Yet to join until you mark them joined.</p></div>
+        <ExportButton name="employees" head={['Sourcing ID', 'Temp ID', 'Name', 'Job', 'Source', 'Status', 'Joined on', 'Designation', 'CTC', 'Exit date', 'Exit reason']}
+          rows={() => [
+            ...(yet.data ?? []).map((r) => [r.sourcing_code, r.temp_employee_code, r.candidate_name, r.job_title, r.agency_name ?? r.recruiter_name, 'Yet to join', '', '', '', '', '']),
+            ...(status === 'yet_to_join' ? [] : people.data ?? []).map((e) => [e.sourcing_code, e.temp_employee_code, e.candidate_name, e.job_title, e.agency_name ?? e.recruiter_name, e.status === 'active' ? 'Active' : 'Exited', e.joined_on, e.designation, e.annual_ctc, e.exit_date, e.exit_reason]),
+          ]} />
+      </div>
       <div className="card">
         <div className="toolbar" role="tablist" aria-label="View">
           <button role="tab" aria-selected={tab === 'people'} className={`btn btn-sm ${tab === 'people' ? 'btn-primary' : ''}`} onClick={() => setTab('people')}>People</button>

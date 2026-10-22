@@ -37,11 +37,21 @@ export async function statusSummaryRoutes(app: FastifyInstance) {
           .whereRef('i.application_id', '=', 'a.id').where('m.user_id', '=', p.userId)));
       }
       if (f.vacancy_id) q = q.where('a.vacancy_id', '=', f.vacancy_id);
-      return q.execute();
+      const rows = await q.execute();
+      if (!f.vacancy_id) return { rows, job: null };
+      // For one job: openings filled and the turnaround time (TAT) to fill them all.
+      const v = await tx.selectFrom('vacancies').select(['headcount', 'opened_at', 'closed_at']).where('id', '=', f.vacancy_id).executeTakeFirst();
+      const joins = await tx.selectFrom('employment_records').select('joined_on').where('vacancy_id', '=', f.vacancy_id).orderBy('joined_on').execute();
+      if (!v) return { rows, job: null };
+      const filled = joins.length;
+      const lastJoin = filled >= v.headcount ? joins[v.headcount - 1]!.joined_on : null;
+      const end = lastJoin ? new Date(lastJoin) : (v.closed_at ?? new Date());
+      const days = Math.max(0, Math.round((end.getTime() - new Date(v.opened_at).getTime()) / 86_400_000));
+      return { rows, job: { openings: v.headcount, filled, all_filled: !!lastJoin, tat_days: days, opened_at: v.opened_at } };
     });
     const by = Object.fromEntries(SIMPLE_STATUSES.map((s) => [s, 0])) as Record<string, number>;
-    for (const r of counts) by[r.s] = r.n;
-    return { data: { ...by, total: counts.reduce((n, r) => n + r.n, 0) } };
+    for (const r of counts.rows) by[r.s] = r.n;
+    return { data: { ...by, total: counts.rows.reduce((n, r) => n + r.n, 0), job: counts.job } };
   });
 
   // Selected, but the candidate did not join.

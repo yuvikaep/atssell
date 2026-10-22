@@ -1,3 +1,4 @@
+import { canExport, ExportButton } from '../components/ExportButton';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useDeferredValue, useState } from 'react';
@@ -74,7 +75,11 @@ function AllJobsPage() {
           <h1>Jobs</h1>
           <p>Job openings with their hiring target and actual joins. Assign recruiters and agencies from a job.</p>
         </div>
-        {can(me, 'requisitions.create') && can(me, 'vacancies.manage') && <button className="btn btn-primary" onClick={() => setCreating(true)}>New job</button>}
+        <div className="actions-row">
+          {canExport(me) && <ExportButton name="jobs" disabled={!list.data?.data.length} head={['Code', 'Job', 'Department', 'Location', 'Openings', 'Joined', 'Status', 'Opened', 'Days open', 'Recruiters', 'Agencies']}
+            rows={() => (list.data?.data ?? []).map((v) => [v.vacancy_code, v.title, v.department_name, v.location, v.headcount, v.joined ?? 0, v.status, v.opened_at.slice(0, 10), v.age_days, v.recruiters, v.agencies])} />}
+          {can(me, 'requisitions.create') && can(me, 'vacancies.manage') && <button className="btn btn-primary" onClick={() => setCreating(true)}>New job</button>}
+        </div>
       </div>
 
       <div className="card">

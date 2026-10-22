@@ -1,8 +1,11 @@
+import { canExport } from '../components/ExportButton';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useDeferredValue, useState } from 'react';
 import { JoinDialog } from '../components/JoinDialog';
 import { StatusCounts } from '../components/StatusCounts';
+import { agenciesQuery, usersQuery } from '../queries';
+import { MultiPick } from '../components/MultiPick';
 import { api, can, formatDay } from '../api';
 import { useMe } from '../components/AppShell';
 import { ScheduleDialog } from '../components/ScheduleDialog';
@@ -46,6 +49,10 @@ export function CandidateMasterPage() {
   const q = useDeferredValue(text.trim());
   const [status, setStatus] = useState('');
   const [source, setSource] = useState('');
+  const [recruiterIds, setRecruiterIds] = useState<string[]>([]);
+  const [agencyIds, setAgencyIds] = useState<string[]>([]);
+  const recruiters = useQuery({ ...usersQuery('all', ''), enabled: source === 'internal' && can(me, 'users.manage') });
+  const agencies = useQuery({ ...agenciesQuery('all'), enabled: source === 'agency' });
   const [city, setCity] = useState('');
   const [sort, setSort] = useState('added');
   const [dir, setDir] = useState<'asc' | 'desc'>('desc');
@@ -53,7 +60,7 @@ export function CandidateMasterPage() {
   const [dialog, setDialog] = useState<null | { kind: 'add' | 'import' } | { kind: 'schedule' | 'join' | 'backout'; row: Row }>(null);
 
   const params = new URLSearchParams({ sort, dir, page: String(page), page_size: '50' });
-  for (const [k, v] of Object.entries({ q, status, source, city })) if (v) params.set(k, v);
+  for (const [k, v] of Object.entries({ q, status, source, city, recruiter_ids: recruiterIds.join(','), agency_ids: agencyIds.join(',') })) if (v) params.set(k, v);
   const list = useQuery({ queryKey: ['master', params.toString()], queryFn: () => api<Page>('GET', `/candidate-master?${params}`) });
   const refresh = () => Promise.all(['master', 'hr-dashboard', 'candidate-status', 'candidates', 'status-summary', 'employment'].map((k) => queryClient.invalidateQueries({ queryKey: [k] })));
   const counts = useQuery({ queryKey: ['status-summary'], queryFn: () => api<{ data: Record<string, number> }>('GET', '/status-summary').then((r) => r.data) });
@@ -61,8 +68,8 @@ export function CandidateMasterPage() {
   const sortBy = (key: string) => { if (sort === key) setDir(dir === 'asc' ? 'desc' : 'asc'); else { setSort(key); setDir(key === 'added' ? 'desc' : 'asc'); } setPage(1); };
   const exportCsv = async () => {
     const all = await api<Page>('GET', `/candidate-master?${new URLSearchParams({ ...Object.fromEntries(params), page: '1', page_size: '200' })}`);
-    const head = ['Name', 'Email', 'Phone', 'City', 'Title', 'Experience', 'Notice (days)', 'Job', 'Status', 'Source', 'Feedback avg'];
-    const lines = [head, ...all.data.map((r) => [r.full_name, r.email, r.phone, r.city, r.current_title, r.total_experience_years, r.notice_period_days, r.job_title, statusOf(r).label, r.source, r.avg_rating])];
+    const head = ['Sourcing ID', 'Temp ID', 'Name', 'Email', 'Phone', 'City', 'Title', 'Experience', 'Notice (days)', 'Job', 'Status', 'Source', 'Feedback avg'];
+    const lines = [head, ...all.data.map((r) => [r.sourcing_code, r.temp_employee_code, r.full_name, r.email, r.phone, r.city, r.current_title, r.total_experience_years, r.notice_period_days, r.job_title, statusOf(r).label, r.source, r.avg_rating])];
     const blob = new Blob([`﻿${lines.map((l) => l.map(cell).join(',')).join('\r\n')}\r\n`], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = `candidates-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href);
@@ -75,7 +82,7 @@ export function CandidateMasterPage() {
         <div><h1>Candidates</h1><p>Every candidate on one sheet. Update a status in place, or open the row menu for interviews, offers, decisions and joining.</p></div>
         <div className="actions-row">
           <button className="btn" onClick={() => setDialog({ kind: 'import' })}>Import CSV</button>
-          <button className="btn" onClick={exportCsv} disabled={!data || data.total === 0}>Export CSV</button>
+          {canExport(me) && <button className="btn" onClick={exportCsv} disabled={!data || data.total === 0}>Export CSV</button>}
           {can(me, 'candidates.manage') && <button className="btn btn-primary" onClick={() => setDialog({ kind: 'add' })}>Add candidate</button>}
         </div>
       </div>
@@ -87,9 +94,17 @@ export function CandidateMasterPage() {
             <option value="">All statuses</option>
             {Object.entries(SIMPLE).map(([k, v]) => <option key={k} value={k}>{v.label}{counts.data ? ` (${counts.data[k] ?? 0})` : ''}</option>)}
           </select>
-          <select aria-label="Source" value={source} onChange={(e) => { setSource(e.target.value); setPage(1); }}>
-            <option value="">Any source</option><option value="agency">Agencies</option><option value="internal">Company recruiters</option>
+          <select aria-label="Source" value={source} onChange={(e) => { setSource(e.target.value); setRecruiterIds([]); setAgencyIds([]); setPage(1); }}>
+            <option value="">Any source</option><option value="internal">Company recruiter</option><option value="agency">Agency</option>
           </select>
+          {source === 'internal' && (
+            <MultiPick label="Recruiters" value={recruiterIds} onChange={(ids) => { setRecruiterIds(ids); setPage(1); }}
+              options={(recruiters.data?.data ?? []).filter((u) => u.roles.some((r) => r.code === 'internal_recruiter')).map((u) => ({ id: u.id, name: u.full_name }))} />
+          )}
+          {source === 'agency' && (
+            <MultiPick label="Agencies" value={agencyIds} onChange={(ids) => { setAgencyIds(ids); setPage(1); }}
+              options={(agencies.data ?? []).map((a) => ({ id: a.id, name: a.name }))} />
+          )}
           <input type="search" placeholder="City" aria-label="City" value={city} onChange={(e) => { setCity(e.target.value); setPage(1); }} style={{ width: 120 }} />
         </div>
         {list.isPending ? <Loading /> : list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : data!.data.length === 0 ? (

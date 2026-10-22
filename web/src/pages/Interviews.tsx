@@ -1,3 +1,4 @@
+import { canExport, ExportButton } from '../components/ExportButton';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
@@ -61,6 +62,8 @@ export function InterviewsPage() {
           <h1>Interviews</h1>
           <p>Schedule, track and collect feedback. Schedule from a candidate or the pipeline.</p>
         </div>
+        {canExport(me) && <ExportButton name="interviews" disabled={!list.data?.data.length} head={['Candidate', 'Job', 'Round', 'Mode', 'Start', 'Status', 'Panel', 'Feedback']}
+          rows={() => (list.data?.data ?? []).map((i) => [i.candidate_name, i.vacancy_title, i.round_name, i.mode, i.scheduled_start, i.status, i.panel, `${i.feedback_submitted}/${i.feedback_expected}`])} />}
       </div>
       <div className="card">
         <div className="toolbar">

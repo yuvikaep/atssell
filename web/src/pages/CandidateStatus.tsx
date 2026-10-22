@@ -1,3 +1,5 @@
+import { useMe } from '../components/AppShell';
+import { canExport, ExportButton } from '../components/ExportButton';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useState } from 'react';
 import { Link, useSearch } from '@tanstack/react-router';
@@ -20,13 +22,17 @@ export function CandidateStatusPage() {
   const jobs = useQuery(hiringHomeQuery);
   const list = useQuery(candidateStatusQuery(job, q, selected, jobRole));
   const queryClient = useQueryClient();
+  const me = useMe();
   const [booking, setBooking] = useState<CandidateStatusRow | null>(null);
   const [another, setAnother] = useState<CandidateStatusRow | null>(null);
   const refresh = () => Promise.all(['candidate-status', 'interviews', 'tasks', 'hiring-home'].map((k) => queryClient.invalidateQueries({ queryKey: [k] })));
 
   return (
     <>
-      <div className="page-header"><div><h1>Candidate status</h1><p>Where each candidate stands, and what the interviewers said.</p></div></div>
+      <div className="page-header"><div><h1>Candidate status</h1><p>Where each candidate stands, and what the interviewers said.</p></div>
+        {canExport(me) && <ExportButton name="candidate-status" disabled={!list.data?.length} head={['Sourcing ID', 'Temp ID', 'Candidate', 'Job', 'Role', 'Status', 'Feedback avg', 'Remark']}
+          rows={() => (list.data ?? []).map((r) => [r.sourcing_code, r.temp_employee_code, r.candidate_name, r.vacancy_title, r.job_role_name, r.label, r.feedback?.avg_rating, r.remark])} />}
+      </div>
       <StatusCounts />
       <div className="card">
         <div className="toolbar">

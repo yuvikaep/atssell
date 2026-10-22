@@ -1,3 +1,5 @@
+import { useMe } from '../components/AppShell';
+import { canExport, ExportButton } from '../components/ExportButton';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -9,6 +11,7 @@ import { OwnershipBadge } from './Portal';
 export function PortalSubmissionsPage() {
   const [page, setPage] = useState(1);
   const list = useQuery(portalSubmissionsQuery({ page }));
+  const me = useMe();
   const download = useMutation({
     mutationFn: (id: string) => api<{ data: { url: string } }>('POST', `/agency/submissions/${id}/resume-url`),
     // A signed, short-lived link; the response is an attachment so the page stays put.
@@ -23,6 +26,8 @@ export function PortalSubmissionsPage() {
           <h1>Submissions</h1>
           <p>Candidates your agency has submitted, and where they stand.</p>
         </div>
+        {canExport(me) && <ExportButton name="submissions" disabled={!list.data?.data.length} head={['Sourcing ID', 'Temp ID', 'Candidate', 'Title', 'City', 'Job', 'Stage', 'Submitted', 'Submitted by']}
+          rows={() => (list.data?.data ?? []).map((s) => [s.sourcing_code, s.temp_employee_code, s.candidate_name, s.current_title, s.city, s.vacancy.title, s.stage, s.submitted_at.slice(0, 10), s.submitted_by])} />}
       </div>
       <div className="card">
         {download.error && <div style={{ padding: '12px 12px 0' }}><FormError error={download.error} /></div>}

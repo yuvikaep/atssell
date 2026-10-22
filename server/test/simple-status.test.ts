@@ -31,6 +31,13 @@ describe('plain statuses', () => {
     const after = (await call(ctx, admin, 'GET', '/status-summary')).json().data;
     expect(after.selected).toBe(before.selected + 1);
     expect(after.total).toBe(before.total);
+    const job = (await call(ctx, admin, 'GET', `/status-summary?vacancy_id=${a.vacancyId}`)).json().data;
+    expect(job).toMatchObject({ selected: 1, total: 1, job: { openings: expect.any(Number), filled: 0, all_filled: false } });
+    // Source filter: the sourcing recruiter (the admin here) picks this candidate out.
+    const me = (await call(ctx, admin, 'GET', '/me')).json().data.user.id;
+    const byRecruiter = (await call(ctx, admin, 'GET', `/candidate-master?source=internal&recruiter_ids=${me}`)).json().data.map((r: { id: string }) => r.id);
+    expect(byRecruiter).toContain(a.candidateId);
+    expect((await call(ctx, admin, 'GET', `/candidate-master?recruiter_ids=${s.users.hr1.id}`)).json().data.map((r: { id: string }) => r.id)).not.toContain(a.candidateId);
 
     expect((await call(ctx, admin, 'POST', `/applications/${a.applicationId}/backout`, {})).statusCode).toBe(400);
     expect((await call(ctx, admin, 'POST', `/applications/${a.applicationId}/backout`, { reason: 'Took another offer' })).statusCode).toBe(200);
