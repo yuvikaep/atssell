@@ -228,7 +228,7 @@ export const decisionListQuery = (decision: string) => ({
   queryFn: () => api<{ data: import('./api').DecisionRow[] }>('GET', `/decisions${qs({ decision })}`).then((r) => r.data),
 });
 
-export const candidateStatusQuery = (vacancyId: string, q: string) => ({
-  queryKey: ['candidate-status', vacancyId, q],
-  queryFn: () => api<{ data: import('./api').CandidateStatusRow[] }>('GET', `/candidate-status${qs({ vacancy_id: vacancyId || undefined, q: q || undefined })}`).then((r) => r.data),
+export const candidateStatusQuery = (vacancyId: string, q: string, selected = '') => ({
+  queryKey: ['candidate-status', vacancyId, q, selected],
+  queryFn: () => api<{ data: import('./api').CandidateStatusRow[] }>('GET', `/candidate-status${qs({ vacancy_id: vacancyId || undefined, q: q || undefined, selected: selected || undefined })}`).then((r) => r.data),
 });

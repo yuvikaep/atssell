@@ -4,7 +4,7 @@ import { Link, useSearch } from '@tanstack/react-router';
 import { api, formatInZone, RECOMMENDATION_LABEL, type CandidateStatusRow, type Recommendation } from '../api';
 import { ScheduleDialog } from '../components/ScheduleDialog';
 import { SetTimeDialog } from '../components/SetTimeDialog';
-import { Badge, Dialog, EmptyState, ErrorState, Field, FormError, Loading } from '../components/ui';
+import { Badge, Dialog, IdTags, EmptyState, ErrorState, Field, FormError, Loading } from '../components/ui';
 import { candidateStatusQuery, hiringHomeQuery } from '../queries';
 
 /** One list, one status per candidate, and what the interviewers said. Each row can be opened, edited, sourced for another job, or booked. */
@@ -12,9 +12,10 @@ export function CandidateStatusPage() {
   const search = useSearch({ strict: false }) as { job?: string };
   const [job, setJob] = useState(search.job ?? '');
   const [text, setText] = useState('');
+  const [selected, setSelected] = useState('');
   const q = useDeferredValue(text.trim());
   const jobs = useQuery(hiringHomeQuery);
-  const list = useQuery(candidateStatusQuery(job, q));
+  const list = useQuery(candidateStatusQuery(job, q, selected));
   const queryClient = useQueryClient();
   const [booking, setBooking] = useState<CandidateStatusRow | null>(null);
   const [another, setAnother] = useState<CandidateStatusRow | null>(null);
@@ -25,10 +26,15 @@ export function CandidateStatusPage() {
       <div className="page-header"><div><h1>Candidate status</h1><p>Where each candidate stands, and what the interviewers said.</p></div></div>
       <div className="card">
         <div className="toolbar">
-          <input className="grow" type="search" placeholder="Search by name" aria-label="Search candidates" value={text} onChange={(e) => setText(e.target.value)} />
+          <input className="grow" type="search" placeholder="Search by name, sourcing ID or temp ID" aria-label="Search candidates" value={text} onChange={(e) => setText(e.target.value)} />
           <select aria-label="Job" value={job} onChange={(e) => setJob(e.target.value)}>
             <option value="">All my jobs</option>
             {(jobs.data?.vacancies ?? []).map((v) => <option key={v.id} value={v.id}>{v.title}</option>)}
+          </select>
+          <select aria-label="Selected" value={selected} onChange={(e) => setSelected(e.target.value)}>
+            <option value="">Everyone</option>
+            <option value="yes">Selected (has temp ID)</option>
+            <option value="no">Not selected yet</option>
           </select>
         </div>
         {list.isPending ? <Loading /> : list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : list.data.length === 0 ? (
@@ -38,7 +44,7 @@ export function CandidateStatusPage() {
             <thead><tr><th>Candidate</th><th>Job</th><th>Status</th><th>Feedback</th><th /></tr></thead>
             <tbody>{list.data.map((r) => (
               <tr key={r.application_id}>
-                <td><strong>{r.candidate_name}</strong>{r.headline && <div className="cell-sub">{r.headline}</div>}</td>
+                <td><strong>{r.candidate_name}</strong>{r.headline && <div className="cell-sub">{r.headline}</div>}<IdTags sourcing={r.sourcing_code} temp={r.temp_employee_code} /></td>
                 <td>{r.vacancy_title}</td>
                 <td>
                   <Badge tone={r.tone}>{r.label}</Badge>

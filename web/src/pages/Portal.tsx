@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { EMPLOYMENT_TYPES, VACANCY_STATUS_LABEL, type OwnershipView } from '../api';
-import { Badge, EmptyState, ErrorState, formatDate, Loading, type Tone } from '../components/ui';
+import { Badge, EmptyState, ErrorState, formatDate, Loading, type Tone, IdTags } from '../components/ui';
 import { portalHomeQuery, portalVacanciesQuery } from '../queries';
 
 export const OWNERSHIP_TONE: Record<OwnershipView['label'], Tone> = { Credited: 'success', 'Rejected as duplicate': 'danger' };
@@ -67,7 +67,7 @@ export function PortalPage() {
               <tbody>
                 {h.recent.map((s) => (
                   <tr key={s.id}>
-                    <td><strong>{s.candidate_name}</strong><div className="cell-sub">{s.vacancy.code} · {s.vacancy.title}</div></td>
+                    <td><strong>{s.candidate_name}</strong><div className="cell-sub">{s.vacancy.code} · {s.vacancy.title}</div><IdTags sourcing={s.sourcing_code} temp={s.temp_employee_code} /></td>
                     <td>{s.stage ?? <span className="muted">—</span>}</td>
                     <td><OwnershipBadge view={s.ownership} /></td>
                     <td className="muted">{formatDate(s.submitted_at)}</td>

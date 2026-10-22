@@ -68,3 +68,33 @@ describe('candidate status for recruiters', () => {
     expect((await call(ctx, null, 'GET', '/candidate-status')).statusCode).toBe(401);
   });
 });
+
+describe('sourcing ID and temp employee ID', () => {
+  type Row = { application_id: string; sourcing_code: string; temp_employee_code: string | null };
+  const list = async (query = '') => (await call(ctx, recruiter, 'GET', `/candidate-status${query}`)).json().data as Row[];
+
+  it('gives every sourced candidate a sourcing ID, and a temp employee ID once selected; both can be searched', async () => {
+    const a = await assigned('eeeee');
+    const b = await assigned('ffffff');
+    const rows = await list();
+    const ra = rows.find((r) => r.application_id === a.applicationId)!;
+    const rb = rows.find((r) => r.application_id === b.applicationId)!;
+    expect(ra.sourcing_code).toMatch(/^SRC-\d{6}$/);
+    expect(rb.sourcing_code).not.toBe(ra.sourcing_code);
+    expect(ra.temp_employee_code).toBeNull();
+
+    await call(ctx, engManager, 'POST', `/applications/${a.applicationId}/decisions`, { decision: 'select', reason: 'Good' });
+    const selected = (await list()).find((r) => r.application_id === a.applicationId)!;
+    expect(selected.temp_employee_code).toMatch(/^TEMP-\d{5}$/);
+    // A second select keeps the same ID.
+    await call(ctx, engManager, 'POST', `/applications/${a.applicationId}/decisions`, { decision: 'select', reason: 'Still good' });
+    expect((await list()).find((r) => r.application_id === a.applicationId)!.temp_employee_code).toBe(selected.temp_employee_code);
+
+    expect((await list(`?q=${ra.sourcing_code}`)).map((r) => r.application_id)).toEqual([a.applicationId]);
+    expect((await list(`?q=${selected.temp_employee_code}`)).map((r) => r.application_id)).toEqual([a.applicationId]);
+    const onlySelected = await list('?selected=yes');
+    expect(onlySelected.some((r) => r.application_id === a.applicationId)).toBe(true);
+    expect(onlySelected.some((r) => r.application_id === b.applicationId)).toBe(false);
+    expect((await list('?selected=no')).some((r) => r.application_id === b.applicationId)).toBe(true);
+  });
+});

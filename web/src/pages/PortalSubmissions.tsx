@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../api';
-import { EmptyState, ErrorState, FormError, formatDate, Loading, Pager } from '../components/ui';
+import { EmptyState, ErrorState, FormError, formatDate, Loading, Pager, IdTags } from '../components/ui';
 import { portalSubmissionsQuery } from '../queries';
 import { OwnershipBadge } from './Portal';
 
@@ -38,6 +38,7 @@ export function PortalSubmissionsPage() {
                     <tr key={s.id}>
                       <td>
                         <strong>{s.candidate_name}</strong>
+                        <IdTags sourcing={s.sourcing_code} temp={s.temp_employee_code} />
                         <div className="cell-sub">{[s.current_title, s.city].filter(Boolean).join(' · ')}</div>
                         <div className="cell-sub">{[s.email, s.phone].filter(Boolean).join(' · ')}</div>
                       </td>

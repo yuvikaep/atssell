@@ -295,6 +295,10 @@ export interface CandidateNotesTable {
 
 export interface ApplicationsTable {
   id: Generated<string>;
+  /** Set by a trigger on insert. */
+  sourcing_code: Generated<string>;
+  /** Set by a trigger once the candidate is selected or hired. */
+  temp_employee_code: Generated<string | null>;
   tenant_id: string;
   candidate_id: string;
   vacancy_id: string;

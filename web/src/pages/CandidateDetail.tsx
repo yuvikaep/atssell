@@ -7,7 +7,7 @@ import {
 import { useMe } from '../components/AppShell';
 import { ScheduleDialog } from '../components/ScheduleDialog';
 import { CandidateFormFields, candidateBody, formFromCandidate, type CandidateForm } from '../components/CandidateForm';
-import { BackLink, Badge, DetailGrid, Dialog, ErrorState, Field, fieldError, FormError, formatDate, Loading, Tags } from '../components/ui';
+import { BackLink, Badge, DetailGrid, Dialog, ErrorState, Field, fieldError, FormError, formatDate, Loading, Tags, IdTags } from '../components/ui';
 import { candidateQuery, candidatesQuery, interviewsQuery, vacancyOptionsQuery } from '../queries';
 
 function useRefreshCandidate(id: string) {
@@ -115,7 +115,7 @@ export function CandidateDetailPage() {
                     <tbody>
                       {c.applications.map((a) => (
                         <tr key={a.id}>
-                          <td><Link className="row-link" to="/vacancies/$id" params={{ id: a.vacancy_id }}>{a.vacancy_title}</Link><div className="cell-sub">{a.vacancy_code}</div></td>
+                          <td><Link className="row-link" to="/vacancies/$id" params={{ id: a.vacancy_id }}>{a.vacancy_title}</Link><div className="cell-sub">{a.vacancy_code}</div><IdTags sourcing={a.sourcing_code} temp={a.temp_employee_code} /></td>
                           <td>
                             <Badge tone={a.status === 'hired' ? 'success' : a.status === 'active' ? 'info' : 'muted'}>{a.stage_name}</Badge>
                             {a.disposition_reason && <div className="cell-sub">{a.disposition_reason}</div>}

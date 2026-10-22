@@ -4,12 +4,12 @@ import { useDeferredValue, useState } from 'react';
 import { api, can, formatDay } from '../api';
 import { useMe } from '../components/AppShell';
 import { ScheduleDialog } from '../components/ScheduleDialog';
-import { Badge, Dialog, EmptyState, ErrorState, Field, fieldError, FormError, Loading, Pager, type Tone } from '../components/ui';
+import { Badge, Dialog, EmptyState, ErrorState, Field, fieldError, FormError, Loading, Pager, type Tone, IdTags } from '../components/ui';
 import { CreateCandidateDialog } from './Candidates';
 
 interface Row {
   id: string; full_name: string; email?: string | null; phone?: string | null; city: string | null; current_title: string | null; total_experience_years: number | null;
-  notice_period_days: number | null; skills: string[]; created_at: string; application_id: string | null; app_status: string | null; vacancy_id: string | null; job_title: string | null; vacancy_code: string | null;
+  notice_period_days: number | null; skills: string[]; created_at: string; application_id: string | null; sourcing_code: string | null; temp_employee_code: string | null; app_status: string | null; vacancy_id: string | null; job_title: string | null; vacancy_code: string | null;
   stage_code: string | null; stage_name: string | null; source: string | null; applications: number; avg_rating: number | null; decision: string | null; decision_reason: string | null;
   offer_status: string | null; employment_status: string | null;
 }
@@ -86,7 +86,7 @@ export function CandidateMasterPage() {
       </div>
       <div className="card sheet">
         <div className="toolbar">
-          <input className="grow" type="search" placeholder="Search name, title, city, skill or email" aria-label="Search candidates" value={text} onChange={(e) => { setText(e.target.value); setPage(1); }} />
+          <input className="grow" type="search" placeholder="Search name, title, city, skill, email or ID (SRC-, TEMP-)" aria-label="Search candidates" value={text} onChange={(e) => { setText(e.target.value); setPage(1); }} />
           <select aria-label="Status" value={stage} onChange={(e) => { setStage(e.target.value); setPage(1); }}>
             <option value="">All statuses</option>{(data?.stages ?? []).map((s) => <option key={s.code} value={s.code}>{s.code === 'submitted' ? 'Sourced' : s.name}</option>)}
           </select>
@@ -113,7 +113,7 @@ export function CandidateMasterPage() {
                 const d = r.decision ? DECISION[r.decision] : null;
                 return (
                   <tr key={r.id}>
-                    <td><Link className="row-link" to="/candidates/$id" params={{ id: r.id }}>{r.full_name}</Link><div className="cell-sub">{[r.current_title, r.email].filter(Boolean).join(' · ')}</div></td>
+                    <td><Link className="row-link" to="/candidates/$id" params={{ id: r.id }}>{r.full_name}</Link><div className="cell-sub">{[r.current_title, r.email].filter(Boolean).join(' · ')}</div><IdTags sourcing={r.sourcing_code} temp={r.temp_employee_code} /></td>
                     <td>{r.job_title ? <Link to="/vacancies/$id" params={{ id: r.vacancy_id! }} className="row-link">{r.job_title}</Link> : <span className="muted">—</span>}{r.applications > 1 && <div className="cell-sub">+{r.applications - 1} more</div>}</td>
                     <td>
                       {canSet ? (

@@ -252,7 +252,7 @@ export interface CandidateProfile extends CandidateRow {
     scan_status: string; created_at: string; uploaded_by_name: string | null;
   }[];
   applications: {
-    id: string; status: string; stage_id: string; stage_name: string; stage_code: string; stage_changed_at: string;
+    id: string; sourcing_code: string; temp_employee_code: string | null; status: string; stage_id: string; stage_name: string; stage_code: string; stage_changed_at: string;
     disposition_reason: string | null; vacancy_id: string; vacancy_code: string; vacancy_title: string; vacancy_status: string;
   }[];
   submissions: { id: string; source_type: string; submitted_at: string; ownership_state: string; vacancy_code: string; submitted_by_name: string | null; agency_name: string | null }[];
@@ -348,6 +348,7 @@ export interface OwnershipView {
 
 export interface PortalSubmission {
   id: string;
+  sourcing_code: string; temp_employee_code: string | null;
   submitted_at: string;
   candidate_name: string | null;
   current_title: string | null;
@@ -665,7 +666,7 @@ export function isRecruiter(me: Me) {
   return can(me, 'applications.manage') && can(me, 'vacancies.view_assigned') && !can(me, 'vacancies.view_all') && !can(me, 'users.manage');
 }
 export interface CandidateStatusRow {
-  application_id: string; candidate_id: string; candidate_name: string; headline: string | null;
+  application_id: string; sourcing_code: string; temp_employee_code: string | null; candidate_id: string; candidate_name: string; headline: string | null;
   vacancy_id: string; vacancy_title: string; label: string; tone: 'muted' | 'info' | 'warning' | 'success' | 'danger'; detail: string | null;
   scheduled_start: string | null;
   feedback: { count: number; avg_rating: number; recommendations: string[] } | null;

@@ -2,11 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api, formatDay, formatInr } from '../api';
-import { Badge, Dialog, EmptyState, ErrorState, Field, fieldError, FormError, Loading, type Tone } from '../components/ui';
+import { Badge, Dialog, EmptyState, ErrorState, Field, fieldError, FormError, Loading, type Tone, IdTags } from '../components/ui';
 import { MODEL_LABEL } from './HrDashboard';
 
 interface Emp {
-  id: string; candidate_name: string; vacancy_id: string; job_title: string; joined_on: string; designation: string; annual_ctc: number; status: 'active' | 'exited';
+  id: string; sourcing_code: string; temp_employee_code: string | null; candidate_name: string; vacancy_id: string; job_title: string; joined_on: string; designation: string; annual_ctc: number; status: 'active' | 'exited';
   exit_date: string | null; exit_reason: string | null; invoice_status: string; invoice_reference: string | null; agency_name: string | null; source_agency_id: string | null; recruiter_name: string | null;
   terms_version: number | null; payment_model: string | null; fee_type: string | null; fee_value: number | null; fee_amount: number | null; replacement_status: string | null; replacement_due_by: string | null;
 }
@@ -36,7 +36,7 @@ export function EmployeesPage() {
         <div className="toolbar" role="tablist" aria-label="View">
           <button role="tab" aria-selected={tab === 'people'} className={`btn btn-sm ${tab === 'people' ? 'btn-primary' : ''}`} onClick={() => setTab('people')}>People</button>
           <button role="tab" aria-selected={tab === 'replacements'} className={`btn btn-sm ${tab === 'replacements' ? 'btn-primary' : ''}`} onClick={() => setTab('replacements')}>Replacements{due > 0 ? ` (${due} due)` : ''}</button>
-          {tab === 'people' && (<><span style={{ flex: 1 }} /><input type="search" placeholder="Search by name" aria-label="Search" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 200 }} />
+          {tab === 'people' && (<><span style={{ flex: 1 }} /><input type="search" placeholder="Name, sourcing or temp ID" aria-label="Search" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: 220 }} />
             <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="all">All</option><option value="active">Active</option><option value="exited">Exited</option></select></>)}
         </div>
         {tab === 'people' ? (people.isPending ? <Loading /> : people.isError ? <ErrorState error={people.error} onRetry={() => people.refetch()} /> : people.data.length === 0 ? (
@@ -46,7 +46,7 @@ export function EmployeesPage() {
             <thead><tr><th>Employee</th><th>Job</th><th>Source</th><th>Joined</th><th className="num">CTC</th><th>Status</th><th>Terms and fee</th><th>Invoice</th><th /></tr></thead>
             <tbody>{people.data.map((e) => (
               <tr key={e.id}>
-                <td><strong>{e.candidate_name}</strong><div className="cell-sub">{e.designation}</div></td>
+                <td><strong>{e.candidate_name}</strong><div className="cell-sub">{e.designation}</div><IdTags sourcing={e.sourcing_code} temp={e.temp_employee_code} /></td>
                 <td><Link className="row-link" to="/vacancies/$id" params={{ id: e.vacancy_id }}>{e.job_title}</Link></td>
                 <td>{e.agency_name ?? e.recruiter_name ?? '—'}</td>
                 <td>{formatDay(e.joined_on)}</td><td className="num">{formatInr(e.annual_ctc)}</td>

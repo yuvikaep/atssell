@@ -549,3 +549,7 @@ tr.clickable:hover td, tbody tr:hover td { background: color-mix(in srgb, var(--
 .th-btn:hover { color: var(--text); }
 .inline-status { height: 30px; min-width: 128px; font-size: 13px; padding: 0 8px; }
 .row-menu { height: 30px; width: 104px; font-size: 13px; padding: 0 6px; }
+
+.id-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.id-tag { font: 600 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 0 6px; border-radius: 4px; background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); white-space: nowrap; }
+.id-tag-temp { color: var(--success, #16794a); border-color: currentColor; }

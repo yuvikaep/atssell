@@ -42,10 +42,11 @@ function employmentBase(tx: Tx) {
     .leftJoin('agencies as ag', 'ag.id', 'e.source_agency_id')
     .leftJoin('users as su', 'su.id', 'e.source_user_id')
     .leftJoin('agency_terms as t', 't.id', 'e.agency_terms_id')
-    .leftJoin('replacement_records as r', 'r.employment_id', 'e.id');
+    .leftJoin('replacement_records as r', 'r.employment_id', 'e.id')
+    .innerJoin('applications as ap', 'ap.id', 'e.application_id');
 }
 const COLS = [
-  'e.id', 'e.application_id', 'e.candidate_id', 'c.full_name as candidate_name', 'e.vacancy_id', 'v.title as job_title', 'v.vacancy_code',
+  'e.id', 'e.application_id', 'ap.sourcing_code', 'ap.temp_employee_code', 'e.candidate_id', 'c.full_name as candidate_name', 'e.vacancy_id', 'v.title as job_title', 'v.vacancy_code',
   'e.joined_on', 'e.designation', 'e.annual_ctc', 'e.status', 'e.exit_date', 'e.exit_reason', 'e.invoice_status', 'e.invoice_reference',
   'ag.name as agency_name', 'e.source_agency_id', 'su.full_name as recruiter_name',
   't.version as terms_version', 't.payment_model', 't.fee_type', 't.fee_value', 't.lockin_days', 't.replacement_days',
@@ -134,7 +135,10 @@ export async function employmentRoutes(app: FastifyInstance) {
       if (f.status !== 'all') q = q.where('e.status', '=', f.status);
       if (f.agency_id) q = q.where('e.source_agency_id', '=', f.agency_id);
       if (f.vacancy_id) q = q.where('e.vacancy_id', '=', f.vacancy_id);
-      if (f.q) q = q.where('c.full_name', 'ilike', `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+      if (f.q) {
+        const like = `%${f.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        q = q.where((eb) => eb.or([eb('c.full_name', 'ilike', like), eb('ap.sourcing_code', 'ilike', like), eb('ap.temp_employee_code', 'ilike', like)]));
+      }
       const { total } = await q.select(sql<number>`count(*)::int`.as('total')).executeTakeFirstOrThrow();
       const rows = await q.select([...COLS]).orderBy('e.joined_on', 'desc').limit(f.page_size).offset((f.page - 1) * f.page_size).execute();
       return { data: rows.map(present), page: f.page, page_size: f.page_size, total };
