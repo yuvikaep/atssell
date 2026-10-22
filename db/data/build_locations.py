@@ -44,5 +44,6 @@ with gzip.open('db/data/india-post-offices.json.gz', 'wt', encoding='utf-8', com
     json.dump(out, f, separators=(',', ':'), ensure_ascii=False)
 print(len(out), 'offices;', len({x[0] for x in out}), 'states and UTs;', len({(x[0], x[1]) for x in out}), 'districts;', len({(x[0], x[1], x[2]) for x in out if x[2]}), 'tehsils')
 
-# The web form's State → City lists (web/src/data/india-locations.json) are the districts per state:
-#   python3 -c "import gzip,json; r=json.load(gzip.open('db/data/india-post-offices.json.gz')); m={}; [m.setdefault(s,set()).add(d.strip()) for s,d,*_ in r]; json.dump({k:sorted(v) for k,v in sorted(m.items())}, open('web/src/data/india-locations.json','w'), separators=(',',':'))"
+# The web form's State -> City lists (web/src/data/india-locations.json): every district and tehsil
+# per state, de-duplicated ignoring case:
+#   python3 -c "import gzip,json; r=json.load(gzip.open('db/data/india-post-offices.json.gz')); m={}; [m.setdefault(s,{}).setdefault(x.strip().lower(),x.strip()) for s,d,t,*_ in r for x in (d,t) if x and x.strip()]; json.dump({k:sorted(v.values(),key=str.lower) for k,v in sorted(m.items())}, open('web/src/data/india-locations.json','w'), separators=(',',':'), ensure_ascii=False)"
