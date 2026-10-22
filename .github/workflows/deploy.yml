@@ -1,7 +1,8 @@
 name: Deploy
 
-# Deploys main to the JobsMato server (rms.jobsmato.com) after CI passes, on the self-hosted runner
-# labelled "rms" that runs on that server. See docs/DEPLOY-SERVER.md.
+# Deploys main to the JobsMato server (rms.jobsmato.com) after CI passes. A GitHub-hosted runner connects
+# over SSH through Cloudflare (ssh.jobsmato.com) with a key that can only run deploy/server/deploy-ssh.sh,
+# which runs deploy/server/deploy.sh for the tested commit. See docs/DEPLOY-SERVER.md.
 on:
   workflow_run:
     workflows: [CI]
@@ -14,6 +15,8 @@ concurrency:
   group: deploy-rms-server
   cancel-in-progress: false
 
+permissions: {}
+
 jobs:
   deploy:
     # Only a successful CI run for a push to main in this repository (never a pull request or a fork).
@@ -22,11 +25,37 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
-    runs-on: [self-hosted, rms]
+    runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: production
+    env:
+      CLOUDFLARED_VERSION: "2026.7.3"
+      CLOUDFLARED_SHA256: "049777d30f9bf93da6df8bbe31383460eb2aa51a832c6551824d56f9fcc55974"
+      # The server's SSH host key (/etc/ssh/ssh_host_ed25519_key.pub), so the job only ever talks to that machine.
+      SERVER_HOST_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHsTLG9MgM5nq7yoVPNfkPnZNlW7kIp9tyzqAB4+Imsg"
     steps:
-      - name: Deploy to the server
+      - name: Install cloudflared
+        run: |
+          curl -fsSL -o cloudflared.deb "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64.deb"
+          echo "${CLOUDFLARED_SHA256}  cloudflared.deb" | sha256sum -c -
+          sudo dpkg -i cloudflared.deb
+
+      - name: Deploy on the server
         env:
+          SSH_KEY: ${{ secrets.RMS_DEPLOY_SSH_KEY }}
           # The commit CI tested; a manual run deploys the latest main.
-          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: bash /home/jobsmato/rms/app/deploy/server/deploy.sh
+          COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          if [ -z "$SSH_KEY" ]; then echo "::error::The RMS_DEPLOY_SSH_KEY secret is not set."; exit 1; fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          echo "rms-server ${SERVER_HOST_KEY}" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes \
+            -o HostKeyAlias=rms-server -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 -o ConnectTimeout=30 \
+            -o ProxyCommand="cloudflared access ssh --hostname %h" \
+            jobsmato@ssh.jobsmato.com "deploy ${COMMIT}"
+
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

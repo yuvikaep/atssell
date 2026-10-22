@@ -2,7 +2,7 @@
 # Deploys a commit of main to this server: update the checkout, rebuild, migrate, restart, check health.
 # If the new version does not become healthy, the previous images and commit are put back.
 #
-# Run by .github/workflows/deploy.yml on the self-hosted "rms" runner after CI passes, or by hand:
+# Run by .github/workflows/deploy.yml (over SSH, through deploy-ssh.sh) after CI passes, or by hand:
 #   bash /home/jobsmato/rms/app/deploy/server/deploy.sh            # latest origin/main
 #   DEPLOY_SHA=<commit> bash .../deploy.sh                           # a specific commit already on main
 #

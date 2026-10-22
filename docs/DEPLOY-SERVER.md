@@ -15,7 +15,7 @@ Browser ─HTTPS─> Cloudflare ─"rms" tunnel─> rms_tunnel ─> rms_web (ngi
 | Port | `127.0.0.1:5010` → `rms_web`, for checks on the server; nothing else is published |
 | Data | Docker volumes `rms_pgdata` (database) and `rms_files` (resumes, exports) |
 | Backups | `deploy/server/backups/`, nightly at 02:30 by cron, 14 days kept |
-| Deploys | Automatic after CI passes on `main` (GitHub Actions, self-hosted runner `rms`) |
+| Deploys | Automatic after CI passes on `main` (GitHub Actions over SSH, deploy-only key) |
 
 Connect to the server as described in the JobsMato backend's `docs/MULTI-DOMAIN-BACKEND-SETUP.md`
 (Cloudflare `access tcp` to `ssh.jobsmato.com`, then `ssh -p 2222 jobsmato@localhost`).
@@ -87,8 +87,10 @@ Restore a dump into the running database: `docker exec -i rms_postgres pg_restor
 
 ## Updating: automatic on push to main
 
-A push to `main` runs **CI** on GitHub. When CI passes, the **Deploy** workflow (`.github/workflows/deploy.yml`) runs on
-the self-hosted runner `rms` on this server, which runs `deploy/server/deploy.sh` for the commit CI tested:
+A push to `main` runs **CI** on GitHub. When CI passes, the **Deploy** workflow (`.github/workflows/deploy.yml`)
+runs on a GitHub-hosted runner: it installs `cloudflared` (pinned version and checksum), connects over SSH through
+`ssh.jobsmato.com` with the `RMS_DEPLOY_SSH_KEY` secret, checks the server's pinned host key, and asks for
+`deploy <commit>`. On the server that runs `deploy/server/deploy.sh` for the commit CI tested:
 
 1. checks out that commit (refusing anything not on `main`); `.env`, `api.env`, `tunnel/` and `backups/` are kept;
 2. builds new images while the live site keeps running (a failed build changes nothing);
@@ -100,15 +102,18 @@ To redeploy by hand: Actions → Deploy → **Run workflow**, or on the server `
 
 A rollback restores the code but not the database: a migration that already ran stays applied.
 
-### The runner
+### The deploy key
 
-The runner lives in `/home/jobsmato/actions-runner-rms` and runs as the `actions.runner.*` systemd service, like the
-other repositories' runners on this server. It only takes jobs labelled `rms`.
+A key used only for deploys. Its public half is in `/home/jobsmato/.ssh/authorized_keys` as
 
-**The repository is public.** Pull requests from forks can add their own workflows, and one that asked for the
-`rms` runner would run its code on this server. In GitHub → Settings → Actions → General, set
-**"Require approval for all external contributors"** (or make the repository private) so no outside workflow runs
-without your approval.
+```
+command="bash /home/jobsmato/rms/app/deploy/server/deploy-ssh.sh",restrict ssh-ed25519 AAAA... rms-github-deploy
+```
+
+`restrict` turns off shells, terminals and forwarding, and the forced command accepts only `deploy [commit]`
+(`deploy-ssh.sh`), so the key can do nothing but redeploy `main`. Its private half is the repository secret
+**`RMS_DEPLOY_SSH_KEY`** (Settings → Secrets and variables → Actions). To replace it: generate a new key, swap the
+public line in `authorized_keys` and the secret. To revoke it: delete that line.
 
 ## Checking
 
