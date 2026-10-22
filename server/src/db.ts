@@ -45,6 +45,26 @@ export async function setTokenHash(
   await sql`SELECT set_config(${setting}, ${hash}, true)`.execute(tx);
 }
 
+/** Raised when the API's database role would skip row-level security. A settings problem, not an outage. */
+export class RlsBypassError extends Error {}
+
+/**
+ * Tenant isolation depends on row-level security, which a superuser or a BYPASSRLS role skips
+ * silently (Neon's default owner role is one). Refuse to serve with such a connection.
+ */
+export async function assertRlsEnforced(db: Db): Promise<void> {
+  const { rows } = await sql<{ role: string; rolsuper: boolean; rolbypassrls: boolean }>`
+    SELECT current_user AS role, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user
+  `.execute(db);
+  const r = rows[0];
+  if (!r || r.rolsuper || r.rolbypassrls) {
+    throw new RlsBypassError(
+      `DATABASE_URL: the API connects as "${r?.role ?? 'unknown'}", which bypasses row-level security, so companies' data would not be kept apart. ` +
+      'Connect as the restricted app role (APP_DB_ROLE, created NOBYPASSRLS); on Vercel set APP_DB_PASSWORD.',
+    );
+  }
+}
+
 export function pgErrorCode(err: unknown): string | undefined {
   return typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : undefined;
 }

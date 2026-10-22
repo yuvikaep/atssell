@@ -2,12 +2,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.js';
-import { createDb } from './db.js';
+import { assertRlsEnforced, createDb } from './db.js';
 import { createMailer, createStorage } from './providers/index.js';
 import { runTick } from './worker.js';
 
 const config = loadConfig();
 const db = createDb(config.DATABASE_URL, 1);
+await assertRlsEnforced(db).catch(async (err) => { await db.destroy(); throw err; });
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 try {
   console.log(await runTick({

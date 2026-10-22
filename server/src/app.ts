@@ -65,7 +65,12 @@ export interface AppDeps {
   logger?: boolean;
   /** Called after each signed-in request. Serverless hosting uses it to run background work. */
   afterAuthenticatedRequest?: (tenantId: string) => void;
+  /** Where rate-limit counts are kept. The servers pass a shared store; left out, counts are per process (tests). */
+  rateLimitStore?: unknown;
 }
+
+// While an admin-chosen first password is in place, only these are allowed: read who you are, pick a new password.
+const ALLOWED_BEFORE_PASSWORD_CHANGE = new Set(['GET /api/v1/me', 'POST /api/v1/me/password']);
 
 /** The authenticated principal; only call inside routes registered under the authenticated scope. */
 export function principal(req: FastifyRequest): Principal {
@@ -73,7 +78,7 @@ export function principal(req: FastifyRequest): Principal {
   return req.principal;
 }
 
-export async function buildApp({ config, db, mailer, storage, scanner, logger = true, afterAuthenticatedRequest }: AppDeps): Promise<FastifyInstance> {
+export async function buildApp({ config, db, mailer, storage, scanner, logger = true, afterAuthenticatedRequest, rateLimitStore }: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
     logger: logger && {
       level: config.NODE_ENV === 'production' ? 'info' : 'debug',
@@ -107,7 +112,7 @@ export async function buildApp({ config, db, mailer, storage, scanner, logger = 
     contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },
   });
   await app.register(cookie);
-  await app.register(rateLimit, { global: false });
+  await app.register(rateLimit, { global: false, ...(rateLimitStore ? { store: rateLimitStore as never } : {}) });
   // Per-file size limits are applied per route from tenant settings; this is the hard ceiling.
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1, fields: 10 } });
 
@@ -154,6 +159,9 @@ export async function buildApp({ config, db, mailer, storage, scanner, logger = 
           const p = token ? await resolveSession(db, token) : null;
           if (!p) throw unauthenticated();
           req.principal = p;
+          if (p.mustChangePassword && !ALLOWED_BEFORE_PASSWORD_CHANGE.has(`${req.method} ${req.routeOptions.url}`)) {
+            throw new AppError(403, 'PASSWORD_CHANGE_REQUIRED', 'Choose your own password before continuing.');
+          }
         });
         if (afterAuthenticatedRequest) authed.addHook('onResponse', async (req) => { if (req.principal) afterAuthenticatedRequest(req.principal.tenantId); });
         await authed.register(meRoutes);

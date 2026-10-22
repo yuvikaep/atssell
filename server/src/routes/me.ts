@@ -18,7 +18,7 @@ export async function meRoutes(app: FastifyInstance) {
     return {
       data: {
         limits: { resume_max_bytes: resumeLimit(settings?.resume_max_bytes) },
-        user: { id: p.userId, email: p.email, full_name: p.fullName },
+        user: { id: p.userId, email: p.email, full_name: p.fullName, must_change_password: p.mustChangePassword },
         tenant: { id: p.tenantId, name: p.tenantName, slug: p.tenantSlug },
         roles: p.roles.map((r) => ({ code: r.code, name: r.name, department_id: r.departmentId })),
         permissions: p.permissions,
@@ -40,7 +40,7 @@ export async function meRoutes(app: FastifyInstance) {
       throw invalid('current_password', 'Your current password is not correct.');
     }
     await withTenant(app.db, p.tenantId, async (tx) => {
-      await tx.updateTable('users').set({ password_hash: newHash }).where('id', '=', p.userId).execute();
+      await tx.updateTable('users').set({ password_hash: newHash, must_change_password: false }).where('id', '=', p.userId).execute();
       await tx.updateTable('sessions').set({ revoked_at: sql`now()` }).where('user_id', '=', p.userId).where('id', '<>', p.sessionId).where('revoked_at', 'is', null).execute();
       await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'auth.password_changed', entityType: 'user', entityId: p.userId });
     });

@@ -39,7 +39,7 @@ export type PermissionScope = 'all' | string[];
 
 export interface Me {
   limits?: { resume_max_bytes: number };
-  user: { id: string; email: string; full_name: string };
+  user: { id: string; email: string; full_name: string; must_change_password?: boolean };
   tenant: { id: string; name: string; slug: string };
   roles: { code: string; name: string; department_id: string | null }[];
   permissions: Record<string, PermissionScope>;

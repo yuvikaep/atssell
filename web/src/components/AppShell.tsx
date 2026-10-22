@@ -98,7 +98,8 @@ export function AppShell() {
   const me = useMe();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const unread = useQuery(unreadCountQuery);
+  // Refused by the API until an admin-chosen first password is replaced.
+  const unread = useQuery({ ...unreadCountQuery, enabled: !me.user.must_change_password });
   const [drawer, setDrawer] = useState(false);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);

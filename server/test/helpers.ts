@@ -38,7 +38,7 @@ export interface TestContext {
   close(): Promise<void>;
 }
 
-export async function setupApp(opts: { env?: Record<string, string>; afterAuthenticatedRequest?: (tenantId: string) => void } = {}): Promise<TestContext> {
+export async function setupApp(opts: { env?: Record<string, string>; afterAuthenticatedRequest?: (tenantId: string) => void; rateLimitStore?: (db: Db) => unknown } = {}): Promise<TestContext> {
   const config = loadConfig({
     ...process.env,
     NODE_ENV: 'test',
@@ -50,7 +50,7 @@ export async function setupApp(opts: { env?: Record<string, string>; afterAuthen
   const adminDb = createDb(process.env.TEST_DATABASE_URL_ADMIN!, 2);
   const mailer = new MemoryMailer();
   const storage = new MemoryStorage();
-  const app = await buildApp({ config, db: appDb, mailer, storage, scanner: new DevScanner('test'), logger: false, afterAuthenticatedRequest: opts.afterAuthenticatedRequest });
+  const app = await buildApp({ config, db: appDb, mailer, storage, scanner: new DevScanner('test'), logger: false, afterAuthenticatedRequest: opts.afterAuthenticatedRequest, rateLimitStore: opts.rateLimitStore?.(appDb) });
   return {
     app,
     storage,

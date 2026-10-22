@@ -246,7 +246,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!user || user.status !== 'active' || user.tenant_status !== 'active') throw invalidLink();
 
       await tx.updateTable('password_reset_tokens').set({ used_at: sql`now()` }).where('id', '=', reset.id).execute();
-      await tx.updateTable('users').set({ password_hash: passwordHash, last_login_at: sql`now()` }).where('id', '=', user.id).execute();
+      await tx.updateTable('users').set({ password_hash: passwordHash, must_change_password: false, last_login_at: sql`now()` }).where('id', '=', user.id).execute();
       await revokeUserSessions(tx, user.id);
       await audit(tx, req, {
         tenantId: reset.tenant_id,

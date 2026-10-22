@@ -61,7 +61,7 @@ export async function agencyTermsRoutes(app: FastifyInstance) {
     if (!can(p, 'agency_terms.manage')) throw forbidden();
     const { id } = idParams.parse(req.params);
     const body = TermsBody.parse(req.body);
-    return withTenant(db, p.tenantId, async (tx) => {
+    const data = await withTenant(db, p.tenantId, async (tx) => {
       const agency = await tx.selectFrom('agencies').select('id').where('id', '=', id).forUpdate().executeTakeFirst();
       if (!agency) throw notFound('Agency');
       const last = await tx.selectFrom('agency_terms').select('version').where('agency_id', '=', id).orderBy('version', 'desc').limit(1).executeTakeFirst();
@@ -75,8 +75,9 @@ export async function agencyTermsRoutes(app: FastifyInstance) {
           throw err;
         });
       await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'agency_terms.changed', entityType: 'agency', entityId: id, metadata: { version: row.version, payment_model: body.payment_model, fee_type: body.fee_type, fee_value: body.fee_value, effective_from: body.effective_from, is_active: body.is_active } });
-      return reply.status(201).send({ data: row });
+      return row;
     });
+    return reply.status(201).send({ data });
   });
 
   // ---- The agency's own view: its terms, read-only ----

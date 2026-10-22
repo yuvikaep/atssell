@@ -2,6 +2,7 @@
 // plus a vacancy, so recruiters, agencies, candidates and interviews all keep working as before. Creating
 // a job opens both in one step, already approved: there is no approval chain in this product.
 import type { FastifyInstance } from 'fastify';
+import { sql } from 'kysely';
 import { z } from 'zod';
 import { principal } from '../app.js';
 import { audit } from '../audit.js';
@@ -70,7 +71,8 @@ export async function jobRoutes(app: FastifyInstance) {
       if (!can(p, 'employment.manage')) throw forbidden();
       if (v.status === 'closed' || v.status === 'cancelled') throw new AppError(409, 'ALREADY_CLOSED', 'This job is already closed.');
       const joined = (await tx.selectFrom('employment_records').select((eb) => eb.fn.countAll<number>().as('n')).where('vacancy_id', '=', id).executeTakeFirstOrThrow()).n;
-      await tx.updateTable('vacancies').set({ status: 'closed', status_reason: outcome, closed_at: new Date() }).where('id', '=', id).execute();
+      // Database time, like opened_at: the closed_at >= opened_at check must not depend on the API server's clock.
+      await tx.updateTable('vacancies').set({ status: 'closed', status_reason: outcome, closed_at: sql`now()` }).where('id', '=', id).execute();
       await audit(tx, req, { tenantId: p.tenantId, actorUserId: p.userId, action: 'job.closed', entityType: 'vacancy', entityId: id, metadata: { outcome, target: v.headcount, joined: Number(joined) } });
       return { data: { id, status: 'closed', target: v.headcount, joined: Number(joined), outcome } };
     });

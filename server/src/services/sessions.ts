@@ -46,7 +46,7 @@ export async function resolveSession(db: Db, token: string): Promise<Principal |
     const row = await tx
       .selectFrom('users as u')
       .innerJoin('tenants as t', 't.id', 'u.tenant_id')
-      .select(['u.id', 'u.email', 'u.full_name', 'u.status', 't.name as tenant_name', 't.slug', 't.status as tenant_status'])
+      .select(['u.id', 'u.email', 'u.full_name', 'u.status', 'u.must_change_password', 't.name as tenant_name', 't.slug', 't.status as tenant_status'])
       .where('u.id', '=', session.user_id)
       .executeTakeFirst();
     if (!row || row.status !== 'active' || row.tenant_status !== 'active') return null;
@@ -64,6 +64,7 @@ export async function resolveSession(db: Db, token: string): Promise<Principal |
       email: row.email,
       fullName: row.full_name,
       sessionId: session.id,
+      mustChangePassword: row.must_change_password,
       roles,
       permissions,
     };

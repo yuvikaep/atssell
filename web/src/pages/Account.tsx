@@ -1,12 +1,16 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../api';
+import { meQuery } from '../queries';
 import { useMe } from '../components/AppShell';
 import { Field, fieldError, FormError } from '../components/ui';
 
 /** Account settings for any signed-in person: who they are, and a way to change their own password. */
 export function AccountPage() {
   const me = useMe();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [again, setAgain] = useState('');
@@ -14,8 +18,15 @@ export function AccountPage() {
   const mismatch = again !== '' && again !== next;
   const change = useMutation({
     mutationFn: () => api('POST', '/me/password', { current_password: current, new_password: next }),
-    onSuccess: () => { setCurrent(''); setNext(''); setAgain(''); },
+    onSuccess: async () => {
+      setCurrent(''); setNext(''); setAgain('');
+      if (mustChange) {
+        await queryClient.invalidateQueries({ queryKey: meQuery.queryKey });
+        void navigate({ to: '/' });
+      }
+    },
   });
+  const mustChange = !!me.user.must_change_password;
   const type = show ? 'text' : 'password';
 
   return (
@@ -35,6 +46,7 @@ export function AccountPage() {
 
         <form className="card section" onSubmit={(e) => { e.preventDefault(); if (!mismatch) change.mutate(); }} autoComplete="off">
           <h2>Change password</h2>
+          {mustChange && <div className="alert alert-error" role="alert">Your admin set this password for you. Choose your own to continue. Enter the password they gave you as the current password.</div>}
           {change.isSuccess && <div className="alert alert-success" role="status">Password changed. Your other devices have been signed out.</div>}
           <FormError error={change.error && !fieldError(change.error, 'current_password') && !fieldError(change.error, 'new_password') ? change.error : null} />
           <Field id="pw-current" label="Current password" error={fieldError(change.error, 'current_password')}>
