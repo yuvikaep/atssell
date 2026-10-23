@@ -1,3 +1,4 @@
+import { SwitchCompanyDialog } from './SwitchCompanyDialog';
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
@@ -111,6 +112,7 @@ export function AppShell() {
   const unread = useQuery({ ...unreadCountQuery, enabled: !me.user.must_change_password });
   const [drawer, setDrawer] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const path = useRouterState({ select: (r) => r.location.pathname });
   const logout = useMutation({
@@ -174,6 +176,7 @@ export function AppShell() {
               <div className="menu-pop" role="menu">
                 <div className="menu-head"><strong>{me.user.full_name}</strong><span>{me.user.email}</span><span>{roleNames}</span></div>
                 <Link role="menuitem" to="/account" className="menu-item" onClick={() => setMenu(false)}><Icon name="shield" />Account &amp; password</Link>
+                {can(me, 'agency_portal.use') && <button role="menuitem" className="menu-item" onClick={() => { setMenu(false); setSwitching(true); }}><Icon name="agency" />Switch company</button>}
                 <button role="menuitem" className="menu-item" onClick={() => logout.mutate()} disabled={logout.isPending}><Icon name="logout" />Sign out</button>
               </div>
             )}
@@ -183,6 +186,7 @@ export function AppShell() {
       <main className="main" id="main">
         <div className="page"><Outlet /></div>
       </main>
+      {switching && <SwitchCompanyDialog onClose={() => setSwitching(false)} />}
     </div>
   );
 }

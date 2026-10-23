@@ -226,3 +226,22 @@ describe('sign in without the company code', () => {
     expect((await bare({ company: other.slug, email: company.admin.email, password: PASSWORD })).statusCode).toBe(200);
   });
 });
+
+describe('switching company', () => {
+  it('moves to another company with the same email after re-entering the password; never without it', async () => {
+    const a = await createCompany(ctx, 'swa');
+    const b = await createCompany(ctx, 'swb');
+    const email = 'agent.switch@agency.test';
+    await addUser(ctx, a.tenant.id, { email, role: 'internal_recruiter' });
+    await addUser(ctx, b.tenant.id, { email, role: 'internal_recruiter' });
+    const inA = await loginReq({ company: a.slug, email, password: PASSWORD });
+    const cookieA = sessionCookie(inA);
+    expect((await call(ctx, cookieA, 'POST', '/me/switch-company', { password: 'wrong-password-x' })).statusCode).toBe(401);
+    const sw = await call(ctx, cookieA, 'POST', '/me/switch-company', { password: PASSWORD });
+    expect(sw.statusCode, sw.body).toBe(200);
+    expect(sw.json().data.company.slug).toBe(b.slug);
+    expect((await call(ctx, sessionCookie(sw), 'GET', '/me')).json().data.tenant.slug).toBe(b.slug);
+    // The old session ended.
+    expect((await call(ctx, cookieA, 'GET', '/me')).statusCode).toBe(401);
+  });
+});
